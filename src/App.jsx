@@ -55,7 +55,6 @@ const UNIVERSITY_COURSES = [
 ];
 
 const ITEMS_PER_PAGE = 24;
-const MAX_FILE_SIZE = 20 * 1024 * 1024;
 
 const getTodayDate = () => new Date().toISOString().split("T")[0];
 
@@ -84,9 +83,7 @@ const calculateHours = (segments) => {
     const start = sh * 60 + sm;
     const end = eh * 60 + em;
 
-    if (end > start) {
-      total += (end - start) / 60;
-    }
+    if (end > start) total += (end - start) / 60;
   });
 
   return Number(total.toFixed(2));
@@ -103,7 +100,8 @@ function App() {
     time: "",
     priority: "Media",
     checklist: "",
-    documents: [],
+    resources: [{ name: "", url: "", type: "PDF" }],
+    driveFolderUrl: "",
     workSegments: [{ start: "", end: "" }],
     totalHours: "",
     hourlyRate: "1500",
@@ -163,7 +161,6 @@ function App() {
       (error) => {
         console.error(error);
         setTasksLoading(false);
-
         showAlert({
           type: "warning",
           title: "Error al cargar tareas",
@@ -292,71 +289,6 @@ function App() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleDocuments = (e) => {
-    const selectedFiles = Array.from(e.target.files);
-    const availableSlots = 3 - form.documents.length;
-
-    if (availableSlots <= 0) {
-      showAlert({
-        type: "warning",
-        title: "Límite alcanzado",
-        message: "Solo puedes adjuntar máximo 3 archivos por actividad.",
-        confirmText: "Entendido",
-        onlyConfirm: true,
-        onConfirm: closeAlert,
-      });
-      return;
-    }
-
-    const allowedExtensions = [".pdf", ".txt", ".docx", ".xlsx"];
-
-    const validFiles = selectedFiles.filter((file) =>
-      allowedExtensions.some((ext) => file.name.toLowerCase().endsWith(ext))
-    );
-
-    if (validFiles.length === 0) {
-      showAlert({
-        type: "warning",
-        title: "Archivo no permitido",
-        message: "Solo se permiten archivos PDF, TXT, DOCX y XLSX.",
-        confirmText: "Entendido",
-        onlyConfirm: true,
-        onConfirm: closeAlert,
-      });
-      return;
-    }
-
-    const oversizedFile = validFiles.find((file) => file.size > MAX_FILE_SIZE);
-
-    if (oversizedFile) {
-      showAlert({
-        type: "warning",
-        title: "Archivo muy pesado",
-        message: "Cada archivo debe pesar máximo 20 MB.",
-        confirmText: "Entendido",
-        onlyConfirm: true,
-        onConfirm: closeAlert,
-      });
-      return;
-    }
-
-    const limitedFiles = validFiles.slice(0, availableSlots);
-
-    const docs = limitedFiles.map((file) => ({
-      name: file.name,
-      url: URL.createObjectURL(file),
-      size: file.size,
-      type: file.type,
-    }));
-
-    setForm({
-      ...form,
-      documents: [...form.documents, ...docs].slice(0, 3),
-    });
-
-    e.target.value = "";
-  };
-
   const buildChecklist = () =>
     form.checklist
       .split("\n")
@@ -397,7 +329,10 @@ function App() {
       date: form.date,
       time: form.time,
       priority: form.priority,
-      documents: form.documents,
+      resources: form.resources.filter(
+        (resource) => resource.name.trim() && resource.url.trim()
+      ),
+      driveFolderUrl: form.driveFolderUrl,
       checklist: buildChecklist(),
       workSegments: form.type === "Alekey" ? form.workSegments : [],
       totalHours:
@@ -480,7 +415,10 @@ function App() {
       date: task.date,
       time: task.time,
       priority: task.priority,
-      documents: task.documents || [],
+      resources: task.resources?.length
+        ? task.resources
+        : [{ name: "", url: "", type: "PDF" }],
+      driveFolderUrl: task.driveFolderUrl || "",
       checklist: task.checklist.map((item) => item.text).join("\n"),
       workSegments: task.workSegments?.length
         ? task.workSegments
@@ -533,13 +471,6 @@ function App() {
           });
         }
       },
-    });
-  };
-
-  const removeDoc = (index) => {
-    setForm({
-      ...form,
-      documents: form.documents.filter((_, i) => i !== index),
     });
   };
 
@@ -614,6 +545,31 @@ function App() {
     const rate = Number(task.hourlyRate || 0);
 
     return Number((hours * rate).toFixed(0));
+  };
+
+  const addResource = () => {
+    if (form.resources.length >= 3) return;
+
+    setForm({
+      ...form,
+      resources: [...form.resources, { name: "", url: "", type: "PDF" }],
+    });
+  };
+
+  const updateResource = (index, field, value) => {
+    setForm({
+      ...form,
+      resources: form.resources.map((resource, i) =>
+        i === index ? { ...resource, [field]: value } : resource
+      ),
+    });
+  };
+
+  const removeResource = (index) => {
+    setForm({
+      ...form,
+      resources: form.resources.filter((_, i) => i !== index),
+    });
   };
 
   if (authLoading) {
@@ -951,15 +907,36 @@ function App() {
 
               <p>{selectedTask.description}</p>
 
-              {selectedTask.documents?.length > 0 && (
+              {selectedTask.driveFolderUrl && (
                 <>
-                  <h3>Archivos adjuntos</h3>
+                  <h3>Carpeta principal</h3>
+                  <div className="docs-list">
+                    <a
+                      href={selectedTask.driveFolderUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      <FileText size={18} />
+                      Abrir carpeta de Drive
+                    </a>
+                  </div>
+                </>
+              )}
+
+              {selectedTask.resources?.length > 0 && (
+                <>
+                  <h3>Recursos</h3>
 
                   <div className="docs-list">
-                    {selectedTask.documents.map((doc, index) => (
-                      <a href={doc.url} target="_blank" key={doc.name + index}>
+                    {selectedTask.resources.map((resource, index) => (
+                      <a
+                        href={resource.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        key={resource.name + index}
+                      >
                         <FileText size={18} />
-                        {doc.name}
+                        {resource.type} · {resource.name}
                       </a>
                     ))}
                   </div>
@@ -1210,32 +1187,68 @@ function App() {
                 }
               />
 
-              <label className="image-upload">
-                <FileText />
-                Adjuntar archivos opcionales máx. 3
-                <input
-                  type="file"
-                  multiple
-                  onChange={handleDocuments}
-                  accept=".pdf,.txt,.docx,.xlsx"
-                />
-              </label>
+              <input
+                placeholder="Link de carpeta Drive principal (opcional)"
+                value={form.driveFolderUrl}
+                onChange={(e) =>
+                  setForm({ ...form, driveFolderUrl: e.target.value })
+                }
+              />
 
-              {form.documents.length > 0 && (
-                <div className="docs-list">
-                  {form.documents.map((doc, index) => (
-                    <div className="doc-item" key={doc.name + index}>
-                      <div className="doc-name">
-                        <FileText size={18} />
-                        <span>{doc.name}</span>
-                      </div>
+              <h3 className="form-section-title">Links de recursos</h3>
 
-                      <button type="button" onClick={() => removeDoc(index)}>
-                        Quitar
-                      </button>
-                    </div>
-                  ))}
+              {form.resources.map((resource, index) => (
+                <div className="resource-box" key={index}>
+                  <input
+                    placeholder="Nombre del recurso"
+                    value={resource.name}
+                    onChange={(e) =>
+                      updateResource(index, "name", e.target.value)
+                    }
+                  />
+
+                  <input
+                    placeholder="Link de Google Drive, OneDrive, Moodle..."
+                    value={resource.url}
+                    onChange={(e) =>
+                      updateResource(index, "url", e.target.value)
+                    }
+                  />
+
+                  <select
+                    value={resource.type}
+                    onChange={(e) =>
+                      updateResource(index, "type", e.target.value)
+                    }
+                  >
+                    <option>PDF</option>
+                    <option>DOCX</option>
+                    <option>XLSX</option>
+                    <option>TXT</option>
+                    <option>Drive</option>
+                    <option>Otro</option>
+                  </select>
+
+                  {form.resources.length > 1 && (
+                    <button
+                      type="button"
+                      className="remove-resource-btn"
+                      onClick={() => removeResource(index)}
+                    >
+                      Quitar
+                    </button>
+                  )}
                 </div>
+              ))}
+
+              {form.resources.length < 3 && (
+                <button
+                  type="button"
+                  className="add-segment-btn"
+                  onClick={addResource}
+                >
+                  + Agregar otro link
+                </button>
               )}
 
               <button className="save-btn" onClick={saveTask}>
