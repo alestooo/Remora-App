@@ -13,15 +13,12 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { auth, provider, db } from "./firebase";
-
 import { registerPasskey, unlockWithPasskey } from "./passkey";
 
 import {
   Plus,
-  CalendarDays,
   ListTodo,
   BarChart3,
-  Settings,
   Trash2,
   X,
   FileText,
@@ -63,6 +60,10 @@ const UNIVERSITY_COURSES = [
 
 const ITEMS_PER_PAGE = 10;
 const MASTER_PASSWORD = "Alekey149";
+const UNLOCK_TIME = 5 * 60 * 1000;
+
+const isMobileDevice = () =>
+  /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
 
 const getTodayDate = () => new Date().toISOString().split("T")[0];
 
@@ -143,7 +144,6 @@ function App() {
   const [tasksLoading, setTasksLoading] = useState(false);
 
   const [view, setView] = useState("Inicio");
-  const [homeMode, setHomeMode] = useState("Lista");
   const [tasks, setTasks] = useState([]);
   const [toolsData, setToolsData] = useState({ quickNote: "" });
   const [accounts, setAccounts] = useState([]);
@@ -163,6 +163,9 @@ function App() {
   const [accountForm, setAccountForm] = useState(emptyAccountForm);
   const [visibleAccountId, setVisibleAccountId] = useState(null);
   const [accountsUnlocked, setAccountsUnlocked] = useState(false);
+  const [accountsUnlockEnd, setAccountsUnlockEnd] = useState(null);
+  const [unlockSecondsLeft, setUnlockSecondsLeft] = useState(0);
+  const [mobilePasskeyAvailable, setMobilePasskeyAvailable] = useState(false);
   const [masterInput, setMasterInput] = useState("");
   const [accountErrors, setAccountErrors] = useState({});
 
@@ -175,53 +178,77 @@ function App() {
   const showAlert = (data) => setAlertData(data);
   const closeAlert = () => setAlertData(null);
 
-useEffect(() => {
-  let mounted = true;
-
-  const fallback = setTimeout(() => {
-    if (mounted) {
-      setAuthLoading(false);
-    }
-  }, 3000);
-
-  const unsubscribe = onAuthStateChanged(
-    auth,
-    (currentUser) => {
-      clearTimeout(fallback);
-
-      if (!mounted) return;
-
-      setUser(currentUser);
-      setAuthLoading(false);
-    },
-    (error) => {
-      clearTimeout(fallback);
-      console.error("Auth error:", error);
-
-      if (!mounted) return;
-
-      setAuthLoading(false);
-    }
-  );
-
-  return () => {
-    mounted = false;
-    clearTimeout(fallback);
-    unsubscribe();
-  };
-}, []);
+  useEffect(() => {
+    setMobilePasskeyAvailable(isMobileDevice());
+  }, []);
 
   useEffect(() => {
-    if (!accountsUnlocked) return;
+    let mounted = true;
 
-    const timer = setTimeout(() => {
-      setAccountsUnlocked(false);
-      setVisibleAccountId(null);
-      setMasterInput("");
-    }, 5 * 60 * 1000);
+    const fallback = setTimeout(() => {
+      if (mounted) setAuthLoading(false);
+    }, 3000);
 
-    return () => clearTimeout(timer);
-  }, [accountsUnlocked]);
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      (currentUser) => {
+        clearTimeout(fallback);
+        if (!mounted) return;
+
+        setUser(currentUser);
+        setAuthLoading(false);
+      },
+      (error) => {
+        clearTimeout(fallback);
+        console.error("Auth error:", error);
+        if (!mounted) return;
+
+        setAuthLoading(false);
+      }
+    );
+
+    return () => {
+      mounted = false;
+      clearTimeout(fallback);
+      unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const savedEnd = localStorage.getItem(`remora_accounts_unlock_${user.uid}`);
+
+    if (savedEnd && Number(savedEnd) > Date.now()) {
+      setAccountsUnlocked(true);
+      setAccountsUnlockEnd(Number(savedEnd));
+    }
+  }, [user]);
+
+  useEffect(() => {
+    if (!accountsUnlocked || !accountsUnlockEnd) return;
+
+    const interval = setInterval(() => {
+      const left = Math.max(
+        0,
+        Math.ceil((accountsUnlockEnd - Date.now()) / 1000)
+      );
+
+      setUnlockSecondsLeft(left);
+
+      if (left <= 0) {
+        setAccountsUnlocked(false);
+        setVisibleAccountId(null);
+        setAccountsUnlockEnd(null);
+
+        if (user) {
+          localStorage.removeItem(`remora_accounts_unlock_${user.uid}`);
+        }
+      }
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [accountsUnlocked, accountsUnlockEnd, user]);
 
   useEffect(() => {
     if (!user) {
@@ -270,6 +297,24 @@ useEffect(() => {
     const unsubscribe = onSnapshot(toolsRef, (snapshot) => {
       if (snapshot.exists()) {
         setToolsData(snapshot.data());
+      } else {
+        setToolsData({ quickNote: "" });
+      }
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const securityRef = doc(db, "users", user.uid, "meta", "security");
+
+    const unsubscribe = onSnapshot(securityRef, (snapshot) => {
+      if (snapshot.exists()) {
+        setSecurityData(snapshot.data());
+      } else {
+        setSecurityData({});
       }
     });
 
@@ -313,6 +358,8 @@ useEffect(() => {
     await signOut(auth);
     setTasks([]);
     setSelectedTask(null);
+    setAccountsUnlocked(false);
+    setVisibleAccountId(null);
   };
 
   const getCover = (task) => DEFAULT_COVERS[task.type];
@@ -332,7 +379,10 @@ useEffect(() => {
   };
 
   const filteredTasks = useMemo(() => {
-    const base = filter === "Todas" ? tasks : tasks.filter((task) => task.type === filter);
+    const base =
+      filter === "Todas"
+        ? tasks
+        : tasks.filter((task) => task.type === filter);
 
     return [...base].sort((a, b) => {
       if (!a.date) return 1;
@@ -344,7 +394,11 @@ useEffect(() => {
   const activeTasks = filteredTasks.filter((task) => !isExpired(task));
   const expiredTasks = filteredTasks.filter((task) => isExpired(task));
 
-  const totalPages = Math.max(1, Math.ceil(activeTasks.length / ITEMS_PER_PAGE));
+  const totalPages = Math.max(
+    1,
+    Math.ceil(activeTasks.length / ITEMS_PER_PAGE)
+  );
+
   const visibleTasks = activeTasks.slice(
     (page - 1) * ITEMS_PER_PAGE,
     page * ITEMS_PER_PAGE
@@ -410,7 +464,8 @@ useEffect(() => {
     const newErrors = {};
 
     if (!form.title.trim()) newErrors.title = "Agrega un título.";
-    if (!form.description.trim()) newErrors.description = "Agrega una descripción.";
+    if (!form.description.trim())
+      newErrors.description = "Agrega una descripción.";
     if (!form.date) newErrors.date = "Agrega una fecha.";
 
     if (form.type === "Alekey") {
@@ -441,7 +496,9 @@ useEffect(() => {
       .filter((item) => item.trim() !== "")
       .map((item) => {
         const oldItem = editing
-          ? selectedTask.checklist.find((old) => old.text.trim() === item.trim())
+          ? selectedTask.checklist.find(
+              (old) => old.text.trim() === item.trim()
+            )
           : null;
 
         return {
@@ -580,7 +637,8 @@ useEffect(() => {
     showAlert({
       type: "danger",
       title: "Eliminar actividad",
-      message: "¿Seguro que quieres eliminarla? Esta acción no se puede deshacer.",
+      message:
+        "¿Seguro que quieres eliminarla? Esta acción no se puede deshacer.",
       confirmText: "Sí, eliminar",
       cancelText: "Cancelar",
       onConfirm: async () => {
@@ -605,7 +663,9 @@ useEffect(() => {
     });
 
     setSelectedTask((prev) =>
-      prev && prev.id === taskId ? { ...prev, checklist: updatedChecklist } : prev
+      prev && prev.id === taskId
+        ? { ...prev, checklist: updatedChecklist }
+        : prev
     );
   };
 
@@ -635,7 +695,9 @@ useEffect(() => {
 
     setForm({
       ...form,
-      workSegments: updatedSegments.length ? updatedSegments : [{ start: "", end: "" }],
+      workSegments: updatedSegments.length
+        ? updatedSegments
+        : [{ start: "", end: "" }],
       totalHours: String(calculateHours(updatedSegments)),
     });
   };
@@ -671,51 +733,11 @@ useEffect(() => {
     });
   };
 
-const saveQuickNote = async () => {
-  await setDoc(
-    doc(db, "users", user.uid, "meta", "tools"),
-    {
-      quickNote: toolsData.quickNote || "",
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true }
-  );
-
-  showAlert({
-    type: "success",
-    title: "Nota guardada",
-    message: "Tu bloc de notas se guardó correctamente.",
-    confirmText: "Listo",
-    onlyConfirm: true,
-    onConfirm: closeAlert,
-  });
-};
-
-const unlockAccounts = () => {
-  if (masterInput === MASTER_PASSWORD) {
-    setAccountsUnlocked(true);
-    setMasterInput("");
-    return;
-  }
-
-  showAlert({
-    type: "warning",
-    title: "Contraseña incorrecta",
-    message: "No se pudo desbloquear la sección de cuentas.",
-    confirmText: "Entendido",
-    onlyConfirm: true,
-    onConfirm: closeAlert,
-  });
-};
-
-const registerPasskeyForAccounts = async () => {
-  try {
-    const credentialId = await registerPasskey(user);
-
+  const saveQuickNote = async () => {
     await setDoc(
-      doc(db, "users", user.uid, "meta", "security"),
+      doc(db, "users", user.uid, "meta", "tools"),
       {
-        passkeyCredentialId: credentialId,
+        quickNote: toolsData.quickNote || "",
         updatedAt: serverTimestamp(),
       },
       { merge: true }
@@ -723,72 +745,147 @@ const registerPasskeyForAccounts = async () => {
 
     showAlert({
       type: "success",
-      title: "Passkey registrada",
-      message:
-        "Ahora puedes desbloquear Cuentas con huella, rostro o PIN del dispositivo.",
+      title: "Nota guardada",
+      message: "Tu bloc de notas se guardó correctamente.",
       confirmText: "Listo",
       onlyConfirm: true,
       onConfirm: closeAlert,
     });
-  } catch (error) {
-    showAlert({
-      type: "warning",
-      title: "No se pudo registrar",
-      message: error.message,
-      confirmText: "Entendido",
-      onlyConfirm: true,
-      onConfirm: closeAlert,
-    });
-  }
-};
+  };
 
-const unlockAccountsWithPasskey = async () => {
-  try {
-    if (!securityData.passkeyCredentialId) {
-      throw new Error("Primero registra una Passkey.");
-    }
-
-    await unlockWithPasskey(securityData.passkeyCredentialId);
+  const unlockAccountsSession = () => {
+    const endTime = Date.now() + UNLOCK_TIME;
 
     setAccountsUnlocked(true);
+    setAccountsUnlockEnd(endTime);
+    setUnlockSecondsLeft(Math.ceil(UNLOCK_TIME / 1000));
     setMasterInput("");
-  } catch (error) {
+
+    localStorage.setItem(`remora_accounts_unlock_${user.uid}`, String(endTime));
+  };
+
+  const unlockAccounts = () => {
+    if (masterInput === MASTER_PASSWORD) {
+      unlockAccountsSession();
+      return;
+    }
+
     showAlert({
       type: "warning",
-      title: "No se pudo desbloquear",
-      message: error.message,
+      title: "Contraseña incorrecta",
+      message: "No se pudo desbloquear la sección de cuentas.",
       confirmText: "Entendido",
       onlyConfirm: true,
       onConfirm: closeAlert,
     });
-  }
-};
+  };
 
-const saveAccount = async () => {
-  const newErrors = {};
+  const registerPasskeyForAccounts = async () => {
+    try {
+      const credentialId = await registerPasskey(user);
 
-  if (!accountForm.title.trim()) {
-    newErrors.title = "Agrega un título.";
-  }
+      await setDoc(
+        doc(db, "users", user.uid, "meta", "security"),
+        {
+          passkeyCredentialId: credentialId,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
 
-  setAccountErrors(newErrors);
-  if (Object.keys(newErrors).length > 0) return;
+      showAlert({
+        type: "success",
+        title: "Passkey registrada",
+        message:
+          "Ahora puedes desbloquear Cuentas con huella, rostro o PIN del dispositivo.",
+        confirmText: "Listo",
+        onlyConfirm: true,
+        onConfirm: closeAlert,
+      });
+    } catch (error) {
+      showAlert({
+        type: "warning",
+        title: "No se pudo registrar",
+        message: error.message,
+        confirmText: "Entendido",
+        onlyConfirm: true,
+        onConfirm: closeAlert,
+      });
+    }
+  };
 
-  const accountRef = doc(collection(db, "users", user.uid, "accounts"));
+  const unlockAccountsWithPasskey = async () => {
+    try {
+      if (!securityData.passkeyCredentialId) {
+        throw new Error("Primero registra una Passkey.");
+      }
 
-  await setDoc(accountRef, {
-    ...accountForm,
-    id: accountRef.id,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  });
+      await unlockWithPasskey(securityData.passkeyCredentialId);
+      unlockAccountsSession();
+    } catch (error) {
+      showAlert({
+        type: "warning",
+        title: "No se pudo desbloquear",
+        message: error.message,
+        confirmText: "Entendido",
+        onlyConfirm: true,
+        onConfirm: closeAlert,
+      });
+    }
+  };
 
-  setAccountForm(emptyAccountForm);
-  setShowAccountModal(false);
-};
+    const saveAccount = async () => {
+    const newErrors = {};
+
+    if (!accountForm.title.trim()) {
+      newErrors.title = "Agrega un título.";
+    }
+
+    setAccountErrors(newErrors);
+    if (Object.keys(newErrors).length > 0) return;
+
+    const accountRef = doc(collection(db, "users", user.uid, "accounts"));
+
+    await setDoc(accountRef, {
+      ...accountForm,
+      id: accountRef.id,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    setAccountForm(emptyAccountForm);
+    setShowAccountModal(false);
+  };
 
   const deleteAccount = async (id) => {
     await deleteDoc(doc(db, "users", user.uid, "accounts", id));
+  };
+
+  const handleEyeClick = async (accountId) => {
+    if (visibleAccountId === accountId) {
+      setVisibleAccountId(null);
+      return;
+    }
+
+    if (mobilePasskeyAvailable && securityData.passkeyCredentialId) {
+      try {
+        await unlockWithPasskey(securityData.passkeyCredentialId);
+        setVisibleAccountId(accountId);
+      } catch {
+        showAlert({
+          type: "warning",
+          title: "No se pudo verificar",
+          message: "No se pudo mostrar la información protegida.",
+          confirmText: "Entendido",
+          onlyConfirm: true,
+          onConfirm: closeAlert,
+        });
+      }
+
+      return;
+    }
+
+    setVisibleAccountId(accountId);
   };
 
   const gradeResult =
@@ -796,12 +893,16 @@ const saveAccount = async () => {
       ? ((Number(gradeScore) / Number(gradeTotal)) * 100).toFixed(2)
       : "";
 
-  const categoryStats = ["Universidad", "Trabajo", "Tarea", "Recordatorio", "Alekey"].map(
-    (category) => ({
-      category,
-      count: tasks.filter((task) => task.type === category).length,
-    })
-  );
+  const categoryStats = [
+    "Universidad",
+    "Trabajo",
+    "Tarea",
+    "Recordatorio",
+    "Alekey",
+  ].map((category) => ({
+    category,
+    count: tasks.filter((task) => task.type === category).length,
+  }));
 
   const weeklyStats = useMemo(() => {
     const today = new Date(getTodayDate());
@@ -819,6 +920,7 @@ const saveAccount = async () => {
   }, [tasks]);
 
   const maxWeekly = Math.max(...weeklyStats.map((item) => item.count), 1);
+
   const totalAlekeyHours = tasks.reduce(
     (sum, task) => sum + Number(task.totalHours || 0),
     0
@@ -927,7 +1029,6 @@ const saveAccount = async () => {
       <main className="content">
         {view === "Inicio" && (
           <>
-
             <div className="filters">
               {[
                 "Todas",
@@ -950,18 +1051,7 @@ const saveAccount = async () => {
               ))}
             </div>
 
-            {homeMode === "Calendario" ? (
-              <div className="calendar-list">
-                {Object.keys(groupedVisibleTasks).map((date) => (
-                  <section key={date} className="date-group">
-                    <h2>{formatDateTitle(date)}</h2>
-                    <div className="task-grid">
-                      {groupedVisibleTasks[date].map((task) => renderTaskCard(task))}
-                    </div>
-                  </section>
-                ))}
-              </div>
-            ) : tasksLoading ? (
+            {tasksLoading ? (
               <section className="empty-state">
                 <h2>Cargando tareas...</h2>
                 <p>Estamos trayendo tus actividades.</p>
@@ -977,7 +1067,9 @@ const saveAccount = async () => {
                   <section key={date} className="date-group">
                     <h2>{formatDateTitle(date)}</h2>
                     <div className="task-grid">
-                      {groupedVisibleTasks[date].map((task) => renderTaskCard(task))}
+                      {groupedVisibleTasks[date].map((task) =>
+                        renderTaskCard(task)
+                      )}
                     </div>
                   </section>
                 ))}
@@ -1011,7 +1103,10 @@ const saveAccount = async () => {
 
                 {totalPages > 1 && (
                   <div className="pagination">
-                    <button disabled={page === 1} onClick={() => setPage(page - 1)}>
+                    <button
+                      disabled={page === 1}
+                      onClick={() => setPage(page - 1)}
+                    >
                       Anterior
                     </button>
 
@@ -1085,7 +1180,9 @@ const saveAccount = async () => {
                   <div className="bar-item" key={item.label}>
                     <div
                       className="bar"
-                      style={{ height: `${(item.count / maxWeekly) * 120 + 12}px` }}
+                      style={{
+                        height: `${(item.count / maxWeekly) * 120 + 12}px`,
+                      }}
                     />
                     <span>{item.label}</span>
                     <small>{item.count}</small>
@@ -1126,38 +1223,52 @@ const saveAccount = async () => {
         {view === "Cuentas" && (
           <section className="accounts-page">
             {!accountsUnlocked ? (
-            <div className="lock-card">
-              <Lock size={54} />
-              <h2>Cuentas protegidas</h2>
-              <p>Introduce la contraseña maestra o usa la huella / Passkey.</p>
+              <div className="lock-card">
+                <Lock size={54} />
+                <h2>Cuentas protegidas</h2>
 
-              <input
-                type="password"
-                placeholder="Contraseña maestra"
-                value={masterInput}
-                onChange={(e) => setMasterInput(e.target.value)}
-              />
+                <p>
+                  {mobilePasskeyAvailable
+                    ? "Introduce la contraseña maestra o usa la huella / Passkey."
+                    : "Introduce la contraseña maestra para desbloquear esta sección."}
+                </p>
 
-              <button className="save-btn" onClick={unlockAccounts}>
-                Desbloquear
-              </button>
+                <input
+                  type="password"
+                  placeholder="Contraseña maestra"
+                  value={masterInput}
+                  onChange={(e) => setMasterInput(e.target.value)}
+                />
 
-              {securityData.passkeyCredentialId ? (
-                <button className="passkey-btn" onClick={unlockAccountsWithPasskey}>
-                  Desbloquear con huella / Passkey
+                <button className="save-btn" onClick={unlockAccounts}>
+                  Desbloquear
                 </button>
-              ) : (
-                <button className="passkey-btn" onClick={registerPasskeyForAccounts}>
-                  Registrar huella / Passkey
-                </button>
-              )}
-            </div>
+
+                {mobilePasskeyAvailable && securityData.passkeyCredentialId ? (
+                  <button
+                    className="passkey-btn"
+                    onClick={unlockAccountsWithPasskey}
+                  >
+                    Desbloquear con huella / Passkey
+                  </button>
+                ) : mobilePasskeyAvailable ? (
+                  <button
+                    className="passkey-btn"
+                    onClick={registerPasskeyForAccounts}
+                  >
+                    Registrar huella / Passkey
+                  </button>
+                ) : null}
+              </div>
             ) : (
               <>
                 <div className="accounts-header">
                   <div>
                     <h2>Cuentas</h2>
-                    <p>Desbloqueado por 5 minutos.</p>
+                    <p>
+                      Desbloqueado por {Math.floor(unlockSecondsLeft / 60)}:
+                      {String(unlockSecondsLeft % 60).padStart(2, "0")}
+                    </p>
                   </div>
 
                   <button
@@ -1179,14 +1290,12 @@ const saveAccount = async () => {
                         <div className="account-title-row">
                           <h3>{account.title}</h3>
 
-                          <button
-                            onClick={() =>
-                              setVisibleAccountId(
-                                visibleAccountId === account.id ? null : account.id
-                              )
-                            }
-                          >
-                            {visibleAccountId === account.id ? <EyeOff /> : <Eye />}
+                          <button onClick={() => handleEyeClick(account.id)}>
+                            {visibleAccountId === account.id ? (
+                              <EyeOff />
+                            ) : (
+                              <Eye />
+                            )}
                           </button>
                         </div>
 
@@ -1260,7 +1369,10 @@ const saveAccount = async () => {
               className="detail-card"
               onClick={(e) => e.stopPropagation()}
             >
-              <button className="close-btn" onClick={() => setSelectedTask(null)}>
+              <button
+                className="close-btn"
+                onClick={() => setSelectedTask(null)}
+              >
                 <X />
               </button>
 
@@ -1270,11 +1382,15 @@ const saveAccount = async () => {
                 alt={selectedTask.title}
               />
 
-              <span className={`priority ${selectedTask.priority.toLowerCase()}`}>
+              <span
+                className={`priority ${selectedTask.priority.toLowerCase()}`}
+              >
                 {selectedTask.priority}
               </span>
 
-              {isExpired(selectedTask) && <span className="expired-label">Vencida</span>}
+              {isExpired(selectedTask) && (
+                <span className="expired-label">Vencida</span>
+              )}
 
               <h2>{selectedTask.title}</h2>
               <p className="type">{selectedTask.type}</p>
@@ -1311,7 +1427,8 @@ const saveAccount = async () => {
                       </p>
 
                       <p>
-                        <strong>Total:</strong> ₡{getPayment(selectedTask)} colones
+                        <strong>Total:</strong> ₡{getPayment(selectedTask)}{" "}
+                        colones
                       </p>
                     </>
                   )}
@@ -1370,7 +1487,9 @@ const saveAccount = async () => {
                       <input
                         type="checkbox"
                         checked={item.done}
-                        onChange={() => toggleChecklistItem(selectedTask.id, index)}
+                        onChange={() =>
+                          toggleChecklistItem(selectedTask.id, index)
+                        }
                       />
                       <span>{item.text}</span>
                     </label>
@@ -1379,7 +1498,10 @@ const saveAccount = async () => {
               )}
 
               <div className="detail-actions">
-                <button className="edit-btn" onClick={() => openEdit(selectedTask)}>
+                <button
+                  className="edit-btn"
+                  onClick={() => openEdit(selectedTask)}
+                >
                   <Pencil size={18} />
                   Editar
                 </button>
@@ -1416,7 +1538,9 @@ const saveAccount = async () => {
                 value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })}
               />
-              {errors.title && <span className="field-error">{errors.title}</span>}
+              {errors.title && (
+                <span className="field-error">{errors.title}</span>
+              )}
 
               <select
                 value={form.type}
@@ -1445,7 +1569,9 @@ const saveAccount = async () => {
               {form.type === "Universidad" && (
                 <select
                   value={form.course}
-                  onChange={(e) => setForm({ ...form, course: e.target.value })}
+                  onChange={(e) =>
+                    setForm({ ...form, course: e.target.value })
+                  }
                 >
                   {UNIVERSITY_COURSES.map((course) => (
                     <option key={course}>{course}</option>
@@ -1456,7 +1582,9 @@ const saveAccount = async () => {
               {form.type === "Alekey" && (
                 <select
                   value={form.alekeyRole}
-                  onChange={(e) => setForm({ ...form, alekeyRole: e.target.value })}
+                  onChange={(e) =>
+                    setForm({ ...form, alekeyRole: e.target.value })
+                  }
                 >
                   <option>Encargado</option>
                   <option>Trabajador</option>
@@ -1466,7 +1594,9 @@ const saveAccount = async () => {
               <textarea
                 placeholder="Descripción"
                 value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, description: e.target.value })
+                }
               />
               {errors.description && (
                 <span className="field-error">{errors.description}</span>
@@ -1483,7 +1613,9 @@ const saveAccount = async () => {
                   })
                 }
               />
-              {errors.date && <span className="field-error">{errors.date}</span>}
+              {errors.date && (
+                <span className="field-error">{errors.date}</span>
+              )}
 
               {form.type === "Alekey" && form.alekeyRole === "Trabajador" ? (
                 <>
@@ -1502,11 +1634,16 @@ const saveAccount = async () => {
                       <input
                         type="time"
                         value={segment.end}
-                        onChange={(e) => updateSegment(index, "end", e.target.value)}
+                        onChange={(e) =>
+                          updateSegment(index, "end", e.target.value)
+                        }
                       />
 
                       {form.workSegments.length > 1 && (
-                        <button type="button" onClick={() => removeSegment(index)}>
+                        <button
+                          type="button"
+                          onClick={() => removeSegment(index)}
+                        >
                           Quitar
                         </button>
                       )}
@@ -1530,18 +1667,23 @@ const saveAccount = async () => {
                   <input
                     placeholder="Horas totales"
                     value={form.totalHours}
-                    onChange={(e) => setForm({ ...form, totalHours: e.target.value })}
+                    onChange={(e) =>
+                      setForm({ ...form, totalHours: e.target.value })
+                    }
                   />
 
                   <input
                     placeholder="Pago por hora en colones"
                     value={form.hourlyRate}
-                    onChange={(e) => setForm({ ...form, hourlyRate: e.target.value })}
+                    onChange={(e) =>
+                      setForm({ ...form, hourlyRate: e.target.value })
+                    }
                   />
 
                   <div className="payment-preview">
                     Total aproximado: ₡
-                    {Number(form.totalHours || 0) * Number(form.hourlyRate || 0)}{" "}
+                    {Number(form.totalHours || 0) *
+                      Number(form.hourlyRate || 0)}{" "}
                     colones
                   </div>
                 </>
@@ -1550,15 +1692,21 @@ const saveAccount = async () => {
                   <input
                     type="time"
                     value={form.time}
-                    onChange={(e) => setForm({ ...form, time: e.target.value })}
+                    onChange={(e) =>
+                      setForm({ ...form, time: e.target.value })
+                    }
                   />
-                  {errors.time && <span className="field-error">{errors.time}</span>}
+                  {errors.time && (
+                    <span className="field-error">{errors.time}</span>
+                  )}
                 </>
               )}
 
               <select
                 value={form.priority}
-                onChange={(e) => setForm({ ...form, priority: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, priority: e.target.value })
+                }
               >
                 <option>Baja</option>
                 <option>Media</option>
@@ -1569,13 +1717,17 @@ const saveAccount = async () => {
               <textarea
                 placeholder="Checklist, una línea por punto"
                 value={form.checklist}
-                onChange={(e) => setForm({ ...form, checklist: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, checklist: e.target.value })
+                }
               />
 
               <input
                 placeholder="Link de carpeta Drive principal (opcional)"
                 value={form.driveFolderUrl}
-                onChange={(e) => setForm({ ...form, driveFolderUrl: e.target.value })}
+                onChange={(e) =>
+                  setForm({ ...form, driveFolderUrl: e.target.value })
+                }
               />
 
               <h3 className="form-section-title">Links de recursos</h3>
@@ -1585,18 +1737,24 @@ const saveAccount = async () => {
                   <input
                     placeholder="Nombre del recurso"
                     value={resource.name}
-                    onChange={(e) => updateResource(index, "name", e.target.value)}
+                    onChange={(e) =>
+                      updateResource(index, "name", e.target.value)
+                    }
                   />
 
                   <input
                     placeholder="Link de Google Drive, OneDrive, Moodle..."
                     value={resource.url}
-                    onChange={(e) => updateResource(index, "url", e.target.value)}
+                    onChange={(e) =>
+                      updateResource(index, "url", e.target.value)
+                    }
                   />
 
                   <select
                     value={resource.type}
-                    onChange={(e) => updateResource(index, "type", e.target.value)}
+                    onChange={(e) =>
+                      updateResource(index, "type", e.target.value)
+                    }
                   >
                     <option>PDF</option>
                     <option>DOCX</option>
@@ -1619,7 +1777,11 @@ const saveAccount = async () => {
               ))}
 
               {form.resources.length < 3 && (
-                <button type="button" className="add-segment-btn" onClick={addResource}>
+                <button
+                  type="button"
+                  className="add-segment-btn"
+                  onClick={addResource}
+                >
                   + Agregar otro link
                 </button>
               )}
@@ -1633,7 +1795,10 @@ const saveAccount = async () => {
         )}
 
         {showAccountModal && (
-          <motion.div className="overlay" onClick={() => setShowAccountModal(false)}>
+          <motion.div
+            className="overlay"
+            onClick={() => setShowAccountModal(false)}
+          >
             <motion.div
               className="modal"
               initial={{ y: 80, opacity: 0 }}
@@ -1641,7 +1806,10 @@ const saveAccount = async () => {
               exit={{ y: 80, opacity: 0 }}
               onClick={(e) => e.stopPropagation()}
             >
-              <button className="back-btn" onClick={() => setShowAccountModal(false)}>
+              <button
+                className="back-btn"
+                onClick={() => setShowAccountModal(false)}
+              >
                 <X />
               </button>
 
@@ -1722,7 +1890,11 @@ const saveAccount = async () => {
               exit={{ scale: 0.85, opacity: 0, y: 20 }}
             >
               <div className="alert-icon">
-                {alertData.type === "success" ? <CheckCircle2 /> : <AlertTriangle />}
+                {alertData.type === "success" ? (
+                  <CheckCircle2 />
+                ) : (
+                  <AlertTriangle />
+                )}
               </div>
 
               <h3>{alertData.title}</h3>
