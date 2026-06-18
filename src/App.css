@@ -490,6 +490,7 @@ select {
   cursor: pointer;
   margin-top: -20px;
   margin-right: 20px;
+  margin: 10px;
 }
 
 .back-btn {
@@ -968,6 +969,8 @@ select {
   border-radius: 17px;
   padding: 14px;
   margin-top: 10px;
+  margin-bottom: 18px;
+
 }
 
 .tool-card textarea {
@@ -1116,6 +1119,24 @@ select {
   cursor: pointer;
   font-weight: 900;
   margin-top: 12px;
+}
+
+.alert-password-input{
+    width:100%;
+    margin-top:18px;
+    padding:14px 16px;
+    border-radius:14px;
+    border:none;
+    outline:none;
+    background:#1f1f1f;
+    color:white;
+    font-size:15px;
+    text-align:center;
+    font-weight:600;
+}
+
+.alert-password-input::placeholder{
+    color:#a5a5a5;
 }
 
 @media (max-width: 650px) {

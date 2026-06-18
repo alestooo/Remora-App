@@ -174,6 +174,7 @@ function App() {
 
   const [errors, setErrors] = useState({});
   const [alertData, setAlertData] = useState(null);
+  const [passwordInput, setPasswordInput] = useState("");
 
   const showAlert = (data) => setAlertData(data);
   const closeAlert = () => setAlertData(null);
@@ -861,32 +862,42 @@ function App() {
     await deleteDoc(doc(db, "users", user.uid, "accounts", id));
   };
 
-  const handleEyeClick = async (accountId) => {
-    if (visibleAccountId === accountId) {
-      setVisibleAccountId(null);
-      return;
+const handleEyeClick = async (accountId) => {
+  if (visibleAccountId === accountId) {
+    setVisibleAccountId(null);
+    return;
+  }
+
+  if (mobilePasskeyAvailable && securityData.passkeyCredentialId) {
+    try {
+      await unlockWithPasskey(securityData.passkeyCredentialId);
+      setVisibleAccountId(accountId);
+    } catch {
+      showAlert({
+        type: "warning",
+        title: "No se pudo verificar",
+        message: "No se pudo mostrar la información protegida.",
+        confirmText: "Entendido",
+        onlyConfirm: true,
+        onConfirm: closeAlert,
+      });
     }
 
-    if (mobilePasskeyAvailable && securityData.passkeyCredentialId) {
-      try {
-        await unlockWithPasskey(securityData.passkeyCredentialId);
-        setVisibleAccountId(accountId);
-      } catch {
-        showAlert({
-          type: "warning",
-          title: "No se pudo verificar",
-          message: "No se pudo mostrar la información protegida.",
-          confirmText: "Entendido",
-          onlyConfirm: true,
-          onConfirm: closeAlert,
-        });
-      }
+    return;
+  }
 
-      return;
-    }
+  setPasswordInput("");
 
-    setVisibleAccountId(accountId);
-  };
+  showAlert({
+    type: "password",
+    title: "Ver cuenta",
+    message: "Introduce la contraseña maestra para ver la información.",
+    confirmText: "Ver cuenta",
+    cancelText: "Cancelar",
+    accountId,
+    onConfirm: null,
+  });
+};
 
   const gradeResult =
     gradeScore && gradeTotal
@@ -1223,43 +1234,44 @@ function App() {
         {view === "Cuentas" && (
           <section className="accounts-page">
             {!accountsUnlocked ? (
-              <div className="lock-card">
-                <Lock size={54} />
-                <h2>Cuentas protegidas</h2>
+            <div className="lock-card">
+              <Lock size={54} />
+              <h2>Cuentas protegidas</h2>
 
+              {mobilePasskeyAvailable && securityData.passkeyCredentialId ? (
+                <p>Usa tu huella, rostro o PIN del dispositivo para entrar.</p>
+              ) : (
                 <p>
-                  {mobilePasskeyAvailable
-                    ? "Introduce la contraseña maestra o usa la huella / Passkey."
-                    : "Introduce la contraseña maestra para desbloquear esta sección."}
+                  Introduce la contraseña maestra
+                  {mobilePasskeyAvailable ? " o registra tu huella / Passkey." : "."}
                 </p>
+              )}
 
-                <input
-                  type="password"
-                  placeholder="Contraseña maestra"
-                  value={masterInput}
-                  onChange={(e) => setMasterInput(e.target.value)}
-                />
+              {(!mobilePasskeyAvailable || !securityData.passkeyCredentialId) && (
+                <>
+                  <input
+                    type="password"
+                    placeholder="Contraseña maestra"
+                    value={masterInput}
+                    onChange={(e) => setMasterInput(e.target.value)}
+                  />
 
-                <button className="save-btn" onClick={unlockAccounts}>
-                  Desbloquear
+                  <button className="save-btn" onClick={unlockAccounts}>
+                    Desbloquear
+                  </button>
+                </>
+              )}
+
+              {mobilePasskeyAvailable && securityData.passkeyCredentialId ? (
+                <button className="passkey-btn" onClick={unlockAccountsWithPasskey}>
+                  Desbloquear con huella / Passkey
                 </button>
-
-                {mobilePasskeyAvailable && securityData.passkeyCredentialId ? (
-                  <button
-                    className="passkey-btn"
-                    onClick={unlockAccountsWithPasskey}
-                  >
-                    Desbloquear con huella / Passkey
-                  </button>
-                ) : mobilePasskeyAvailable ? (
-                  <button
-                    className="passkey-btn"
-                    onClick={registerPasskeyForAccounts}
-                  >
-                    Registrar huella / Passkey
-                  </button>
-                ) : null}
-              </div>
+              ) : mobilePasskeyAvailable ? (
+                <button className="passkey-btn" onClick={registerPasskeyForAccounts}>
+                  Registrar huella / Passkey
+                </button>
+              ) : null}
+            </div>
             ) : (
               <>
                 <div className="accounts-header">
@@ -1881,39 +1893,102 @@ function App() {
           </motion.div>
         )}
 
-        {alertData && (
-          <motion.div className="alert-overlay">
-            <motion.div
-              className={`custom-alert ${alertData.type}`}
-              initial={{ scale: 0.85, opacity: 0, y: 20 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.85, opacity: 0, y: 20 }}
-            >
-              <div className="alert-icon">
-                {alertData.type === "success" ? (
-                  <CheckCircle2 />
-                ) : (
-                  <AlertTriangle />
-                )}
-              </div>
-
-              <h3>{alertData.title}</h3>
-              <p>{alertData.message}</p>
-
-              <div className="alert-actions">
-                {!alertData.onlyConfirm && (
-                  <button className="alert-cancel" onClick={closeAlert}>
-                    {alertData.cancelText || "Cancelar"}
-                  </button>
-                )}
-
-                <button className="alert-confirm" onClick={alertData.onConfirm}>
-                  {alertData.confirmText || "Aceptar"}
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
+{alertData && (
+  <motion.div className="alert-overlay">
+    <motion.div
+      className={`custom-alert ${alertData.type}`}
+      initial={{ scale: 0.85, opacity: 0, y: 20 }}
+      animate={{ scale: 1, opacity: 1, y: 0 }}
+      exit={{ scale: 0.85, opacity: 0, y: 20 }}
+    >
+      <div className="alert-icon">
+        {alertData.type === "success" ? (
+          <CheckCircle2 />
+        ) : alertData.type === "password" ? (
+          <Lock />
+        ) : (
+          <AlertTriangle />
         )}
+      </div>
+
+      <h3>{alertData.title}</h3>
+
+      <p>{alertData.message}</p>
+
+      {alertData.type === "password" && (
+        <input
+          className="alert-password-input"
+          type="password"
+          placeholder="Contraseña maestra"
+          value={passwordInput}
+          onChange={(e) => setPasswordInput(e.target.value)}
+          autoFocus
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              if (passwordInput === MASTER_PASSWORD) {
+                setVisibleAccountId(alertData.accountId);
+                setPasswordInput("");
+                closeAlert();
+              } else {
+                setPasswordInput("");
+
+                showAlert({
+                  type: "warning",
+                  title: "Contraseña incorrecta",
+                  message:
+                    "No se pudo mostrar la información protegida.",
+                  confirmText: "Entendido",
+                  onlyConfirm: true,
+                  onConfirm: closeAlert,
+                });
+              }
+            }
+          }}
+        />
+      )}
+
+      <div className="alert-actions">
+        {!alertData.onlyConfirm && (
+          <button className="alert-cancel" onClick={closeAlert}>
+            {alertData.cancelText || "Cancelar"}
+          </button>
+        )}
+
+        <button
+          className="alert-confirm"
+          onClick={() => {
+            if (alertData.type === "password") {
+              if (passwordInput === MASTER_PASSWORD) {
+                setVisibleAccountId(alertData.accountId);
+                setPasswordInput("");
+                closeAlert();
+                return;
+              }
+
+              setPasswordInput("");
+
+              showAlert({
+                type: "warning",
+                title: "Contraseña incorrecta",
+                message:
+                  "No se pudo mostrar la información protegida.",
+                confirmText: "Entendido",
+                onlyConfirm: true,
+                onConfirm: closeAlert,
+              });
+
+              return;
+            }
+
+            alertData.onConfirm?.();
+          }}
+        >
+          {alertData.confirmText || "Aceptar"}
+        </button>
+      </div>
+    </motion.div>
+  </motion.div>
+)}
       </AnimatePresence>
     </div>
   );
