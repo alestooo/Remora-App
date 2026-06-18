@@ -14,6 +14,8 @@ import {
 } from "firebase/firestore";
 import { auth, provider, db } from "./firebase";
 
+import { registerPasskey, unlockWithPasskey } from "./passkey";
+
 import {
   Plus,
   CalendarDays,
@@ -29,6 +31,11 @@ import {
   CheckCircle2,
   AlertTriangle,
   LogOut,
+  NotebookText,
+  Lock,
+  Eye,
+  EyeOff,
+  Calculator,
 } from "lucide-react";
 
 import icono from "./assets/icono.png";
@@ -54,9 +61,23 @@ const UNIVERSITY_COURSES = [
   "Cálculo Diferencial e Integral",
 ];
 
-const ITEMS_PER_PAGE = 24;
+const ITEMS_PER_PAGE = 10;
+const MASTER_PASSWORD = "Alekey149";
 
 const getTodayDate = () => new Date().toISOString().split("T")[0];
+
+const formatDateTitle = (date) => {
+  if (!date) return "Sin fecha";
+
+  const [year, month, day] = date.split("-");
+  const fixedDate = new Date(Number(year), Number(month) - 1, Number(day));
+
+  return fixedDate.toLocaleDateString("es-CR", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+};
 
 const getAutoPriority = (date) => {
   if (!date) return "Media";
@@ -107,33 +128,100 @@ function App() {
     hourlyRate: "1500",
   };
 
+  const emptyAccountForm = {
+    title: "",
+    username: "",
+    cedula: "",
+    email: "",
+    user: "",
+    password: "",
+    pin: "",
+  };
+
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [tasksLoading, setTasksLoading] = useState(false);
 
-  const [view, setView] = useState("Lista");
+  const [view, setView] = useState("Inicio");
+  const [homeMode, setHomeMode] = useState("Lista");
   const [tasks, setTasks] = useState([]);
+  const [toolsData, setToolsData] = useState({ quickNote: "" });
+  const [accounts, setAccounts] = useState([]);
+  const [securityData, setSecurityData] = useState({});
+
   const [filter, setFilter] = useState("Todas");
   const [page, setPage] = useState(1);
+  const [showExpired, setShowExpired] = useState(false);
+
   const [showModal, setShowModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [originalForm, setOriginalForm] = useState(null);
+
+  const [showAccountModal, setShowAccountModal] = useState(false);
+  const [accountForm, setAccountForm] = useState(emptyAccountForm);
+  const [visibleAccountId, setVisibleAccountId] = useState(null);
+  const [accountsUnlocked, setAccountsUnlocked] = useState(false);
+  const [masterInput, setMasterInput] = useState("");
+  const [accountErrors, setAccountErrors] = useState({});
+
+  const [gradeScore, setGradeScore] = useState("");
+  const [gradeTotal, setGradeTotal] = useState("");
+
   const [errors, setErrors] = useState({});
   const [alertData, setAlertData] = useState(null);
 
   const showAlert = (data) => setAlertData(data);
   const closeAlert = () => setAlertData(null);
 
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+useEffect(() => {
+  let mounted = true;
+
+  const fallback = setTimeout(() => {
+    if (mounted) {
+      setAuthLoading(false);
+    }
+  }, 3000);
+
+  const unsubscribe = onAuthStateChanged(
+    auth,
+    (currentUser) => {
+      clearTimeout(fallback);
+
+      if (!mounted) return;
+
       setUser(currentUser);
       setAuthLoading(false);
-    });
+    },
+    (error) => {
+      clearTimeout(fallback);
+      console.error("Auth error:", error);
 
-    return () => unsubscribe();
-  }, []);
+      if (!mounted) return;
+
+      setAuthLoading(false);
+    }
+  );
+
+  return () => {
+    mounted = false;
+    clearTimeout(fallback);
+    unsubscribe();
+  };
+}, []);
+
+  useEffect(() => {
+    if (!accountsUnlocked) return;
+
+    const timer = setTimeout(() => {
+      setAccountsUnlocked(false);
+      setVisibleAccountId(null);
+      setMasterInput("");
+    }, 5 * 60 * 1000);
+
+    return () => clearTimeout(timer);
+  }, [accountsUnlocked]);
 
   useEffect(() => {
     if (!user) {
@@ -158,8 +246,7 @@ function App() {
         setTasks(userTasks);
         setTasksLoading(false);
       },
-      (error) => {
-        console.error(error);
+      () => {
         setTasksLoading(false);
         showAlert({
           type: "warning",
@@ -171,6 +258,38 @@ function App() {
         });
       }
     );
+
+    return () => unsubscribe();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const toolsRef = doc(db, "users", user.uid, "meta", "tools");
+
+    const unsubscribe = onSnapshot(toolsRef, (snapshot) => {
+      if (snapshot.exists()) {
+        setToolsData(snapshot.data());
+      }
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const accountsRef = collection(db, "users", user.uid, "accounts");
+    const q = query(accountsRef, orderBy("createdAt", "desc"));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const userAccounts = snapshot.docs.map((document) => ({
+        id: document.id,
+        ...document.data(),
+      }));
+
+      setAccounts(userAccounts);
+    });
 
     return () => unsubscribe();
   }, [user]);
@@ -213,19 +332,47 @@ function App() {
   };
 
   const filteredTasks = useMemo(() => {
-    if (filter === "Todas") return tasks;
-    return tasks.filter((task) => task.type === filter);
+    const base = filter === "Todas" ? tasks : tasks.filter((task) => task.type === filter);
+
+    return [...base].sort((a, b) => {
+      if (!a.date) return 1;
+      if (!b.date) return -1;
+      return a.date.localeCompare(b.date);
+    });
   }, [tasks, filter]);
 
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredTasks.length / ITEMS_PER_PAGE)
-  );
+  const activeTasks = filteredTasks.filter((task) => !isExpired(task));
+  const expiredTasks = filteredTasks.filter((task) => isExpired(task));
 
-  const visibleTasks = filteredTasks.slice(
+  const totalPages = Math.max(1, Math.ceil(activeTasks.length / ITEMS_PER_PAGE));
+  const visibleTasks = activeTasks.slice(
     (page - 1) * ITEMS_PER_PAGE,
     page * ITEMS_PER_PAGE
   );
+
+  const groupedVisibleTasks = useMemo(() => {
+    const groups = {};
+
+    visibleTasks.forEach((task) => {
+      const key = task.date || "Sin fecha";
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(task);
+    });
+
+    return groups;
+  }, [visibleTasks]);
+
+  const groupedExpiredTasks = useMemo(() => {
+    const groups = {};
+
+    expiredTasks.forEach((task) => {
+      const key = task.date || "Sin fecha";
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(task);
+    });
+
+    return groups;
+  }, [expiredTasks]);
 
   const formChanged = () => {
     if (!originalForm) return false;
@@ -263,8 +410,7 @@ function App() {
     const newErrors = {};
 
     if (!form.title.trim()) newErrors.title = "Agrega un título.";
-    if (!form.description.trim())
-      newErrors.description = "Agrega una descripción.";
+    if (!form.description.trim()) newErrors.description = "Agrega una descripción.";
     if (!form.date) newErrors.date = "Agrega una fecha.";
 
     if (form.type === "Alekey") {
@@ -295,9 +441,7 @@ function App() {
       .filter((item) => item.trim() !== "")
       .map((item) => {
         const oldItem = editing
-          ? selectedTask.checklist.find(
-              (old) => old.text.trim() === item.trim()
-            )
+          ? selectedTask.checklist.find((old) => old.text.trim() === item.trim())
           : null;
 
         return {
@@ -391,13 +535,11 @@ function App() {
         onlyConfirm: true,
         onConfirm: closeAlert,
       });
-    } catch (error) {
-      console.error(error);
-
+    } catch {
       showAlert({
         type: "warning",
         title: "Error al guardar",
-        message: "No se pudo guardar la actividad en la base de datos.",
+        message: "No se pudo guardar la actividad.",
         confirmText: "Entendido",
         onlyConfirm: true,
         onConfirm: closeAlert,
@@ -438,38 +580,13 @@ function App() {
     showAlert({
       type: "danger",
       title: "Eliminar actividad",
-      message:
-        "¿Seguro que quieres eliminarla? Esta acción no se puede deshacer.",
+      message: "¿Seguro que quieres eliminarla? Esta acción no se puede deshacer.",
       confirmText: "Sí, eliminar",
       cancelText: "Cancelar",
       onConfirm: async () => {
-        try {
-          await deleteDoc(doc(db, "users", user.uid, "tasks", id));
-          setSelectedTask(null);
-          closeAlert();
-
-          setTimeout(() => {
-            showAlert({
-              type: "success",
-              title: "Actividad eliminada",
-              message: "La actividad se eliminó correctamente.",
-              confirmText: "Listo",
-              onlyConfirm: true,
-              onConfirm: closeAlert,
-            });
-          }, 150);
-        } catch (error) {
-          console.error(error);
-
-          showAlert({
-            type: "warning",
-            title: "Error al eliminar",
-            message: "No se pudo eliminar la actividad.",
-            confirmText: "Entendido",
-            onlyConfirm: true,
-            onConfirm: closeAlert,
-          });
-        }
+        await deleteDoc(doc(db, "users", user.uid, "tasks", id));
+        setSelectedTask(null);
+        closeAlert();
       },
     });
   };
@@ -482,29 +599,14 @@ function App() {
       i === index ? { ...item, done: !item.done } : item
     );
 
-    try {
-      await updateDoc(doc(db, "users", user.uid, "tasks", taskId), {
-        checklist: updatedChecklist,
-        updatedAt: serverTimestamp(),
-      });
+    await updateDoc(doc(db, "users", user.uid, "tasks", taskId), {
+      checklist: updatedChecklist,
+      updatedAt: serverTimestamp(),
+    });
 
-      setSelectedTask((prev) =>
-        prev && prev.id === taskId
-          ? { ...prev, checklist: updatedChecklist }
-          : prev
-      );
-    } catch (error) {
-      console.error(error);
-
-      showAlert({
-        type: "warning",
-        title: "Error al actualizar",
-        message: "No se pudo actualizar el checklist.",
-        confirmText: "Entendido",
-        onlyConfirm: true,
-        onConfirm: closeAlert,
-      });
-    }
+    setSelectedTask((prev) =>
+      prev && prev.id === taskId ? { ...prev, checklist: updatedChecklist } : prev
+    );
   };
 
   const updateSegment = (index, field, value) => {
@@ -533,9 +635,7 @@ function App() {
 
     setForm({
       ...form,
-      workSegments: updatedSegments.length
-        ? updatedSegments
-        : [{ start: "", end: "" }],
+      workSegments: updatedSegments.length ? updatedSegments : [{ start: "", end: "" }],
       totalHours: String(calculateHours(updatedSegments)),
     });
   };
@@ -543,7 +643,6 @@ function App() {
   const getPayment = (task) => {
     const hours = Number(task.totalHours || 0);
     const rate = Number(task.hourlyRate || 0);
-
     return Number((hours * rate).toFixed(0));
   };
 
@@ -572,6 +671,159 @@ function App() {
     });
   };
 
+const saveQuickNote = async () => {
+  await setDoc(
+    doc(db, "users", user.uid, "meta", "tools"),
+    {
+      quickNote: toolsData.quickNote || "",
+      updatedAt: serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  showAlert({
+    type: "success",
+    title: "Nota guardada",
+    message: "Tu bloc de notas se guardó correctamente.",
+    confirmText: "Listo",
+    onlyConfirm: true,
+    onConfirm: closeAlert,
+  });
+};
+
+const unlockAccounts = () => {
+  if (masterInput === MASTER_PASSWORD) {
+    setAccountsUnlocked(true);
+    setMasterInput("");
+    return;
+  }
+
+  showAlert({
+    type: "warning",
+    title: "Contraseña incorrecta",
+    message: "No se pudo desbloquear la sección de cuentas.",
+    confirmText: "Entendido",
+    onlyConfirm: true,
+    onConfirm: closeAlert,
+  });
+};
+
+const registerPasskeyForAccounts = async () => {
+  try {
+    const credentialId = await registerPasskey(user);
+
+    await setDoc(
+      doc(db, "users", user.uid, "meta", "security"),
+      {
+        passkeyCredentialId: credentialId,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    showAlert({
+      type: "success",
+      title: "Passkey registrada",
+      message:
+        "Ahora puedes desbloquear Cuentas con huella, rostro o PIN del dispositivo.",
+      confirmText: "Listo",
+      onlyConfirm: true,
+      onConfirm: closeAlert,
+    });
+  } catch (error) {
+    showAlert({
+      type: "warning",
+      title: "No se pudo registrar",
+      message: error.message,
+      confirmText: "Entendido",
+      onlyConfirm: true,
+      onConfirm: closeAlert,
+    });
+  }
+};
+
+const unlockAccountsWithPasskey = async () => {
+  try {
+    if (!securityData.passkeyCredentialId) {
+      throw new Error("Primero registra una Passkey.");
+    }
+
+    await unlockWithPasskey(securityData.passkeyCredentialId);
+
+    setAccountsUnlocked(true);
+    setMasterInput("");
+  } catch (error) {
+    showAlert({
+      type: "warning",
+      title: "No se pudo desbloquear",
+      message: error.message,
+      confirmText: "Entendido",
+      onlyConfirm: true,
+      onConfirm: closeAlert,
+    });
+  }
+};
+
+const saveAccount = async () => {
+  const newErrors = {};
+
+  if (!accountForm.title.trim()) {
+    newErrors.title = "Agrega un título.";
+  }
+
+  setAccountErrors(newErrors);
+  if (Object.keys(newErrors).length > 0) return;
+
+  const accountRef = doc(collection(db, "users", user.uid, "accounts"));
+
+  await setDoc(accountRef, {
+    ...accountForm,
+    id: accountRef.id,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  setAccountForm(emptyAccountForm);
+  setShowAccountModal(false);
+};
+
+  const deleteAccount = async (id) => {
+    await deleteDoc(doc(db, "users", user.uid, "accounts", id));
+  };
+
+  const gradeResult =
+    gradeScore && gradeTotal
+      ? ((Number(gradeScore) / Number(gradeTotal)) * 100).toFixed(2)
+      : "";
+
+  const categoryStats = ["Universidad", "Trabajo", "Tarea", "Recordatorio", "Alekey"].map(
+    (category) => ({
+      category,
+      count: tasks.filter((task) => task.type === category).length,
+    })
+  );
+
+  const weeklyStats = useMemo(() => {
+    const today = new Date(getTodayDate());
+
+    return Array.from({ length: 7 }).map((_, index) => {
+      const date = new Date(today);
+      date.setDate(today.getDate() + index);
+      const key = date.toISOString().split("T")[0];
+
+      return {
+        label: date.toLocaleDateString("es-CR", { weekday: "short" }),
+        count: tasks.filter((task) => task.date === key).length,
+      };
+    });
+  }, [tasks]);
+
+  const maxWeekly = Math.max(...weeklyStats.map((item) => item.count), 1);
+  const totalAlekeyHours = tasks.reduce(
+    (sum, task) => sum + Number(task.totalHours || 0),
+    0
+  );
+
   if (authLoading) {
     return (
       <div className="auth-page">
@@ -596,38 +848,46 @@ function App() {
             Continuar con Google
           </button>
         </div>
-
-        <AnimatePresence>
-          {alertData && (
-            <motion.div className="alert-overlay">
-              <motion.div
-                className={`custom-alert ${alertData.type}`}
-                initial={{ scale: 0.85, opacity: 0, y: 20 }}
-                animate={{ scale: 1, opacity: 1, y: 0 }}
-                exit={{ scale: 0.85, opacity: 0, y: 20 }}
-              >
-                <div className="alert-icon">
-                  <AlertTriangle />
-                </div>
-
-                <h3>{alertData.title}</h3>
-                <p>{alertData.message}</p>
-
-                <div className="alert-actions">
-                  <button
-                    className="alert-confirm"
-                    onClick={alertData.onConfirm}
-                  >
-                    {alertData.confirmText || "Aceptar"}
-                  </button>
-                </div>
-              </motion.div>
-            </motion.div>
-          )}
-        </AnimatePresence>
       </div>
     );
   }
+
+  const renderTaskCard = (task) => (
+    <motion.div
+      layoutId={`task-${task.id}`}
+      whileHover={{ scale: 1.01 }}
+      whileTap={{ scale: 0.98 }}
+      className={`task-card ${task.priority.toLowerCase()} ${
+        isExpired(task) ? "expired" : ""
+      }`}
+      key={task.id}
+      onClick={() => setSelectedTask(task)}
+    >
+      <img className="task-cover" src={getCover(task)} alt={task.title} />
+
+      <div className="task-body">
+        <h3>{task.title}</h3>
+
+        {task.type === "Universidad" && task.course ? (
+          <p>{task.course}</p>
+        ) : task.type === "Alekey" ? (
+          <p>Alekey · {task.alekeyRole}</p>
+        ) : (
+          <p>{task.type}</p>
+        )}
+
+        <small>
+          📅 {task.date || "Sin fecha"} · {task.time || "Sin hora"}
+        </small>
+
+        {isExpired(task) && <span className="expired-label">Vencida</span>}
+
+        <span className={`priority ${task.priority.toLowerCase()}`}>
+          {task.priority}
+        </span>
+      </div>
+    </motion.div>
+  );
 
   return (
     <div className="app">
@@ -665,8 +925,9 @@ function App() {
       </header>
 
       <main className="content">
-        {view === "Lista" && (
+        {view === "Inicio" && (
           <>
+
             <div className="filters">
               {[
                 "Todas",
@@ -689,7 +950,18 @@ function App() {
               ))}
             </div>
 
-            {tasksLoading ? (
+            {homeMode === "Calendario" ? (
+              <div className="calendar-list">
+                {Object.keys(groupedVisibleTasks).map((date) => (
+                  <section key={date} className="date-group">
+                    <h2>{formatDateTitle(date)}</h2>
+                    <div className="task-grid">
+                      {groupedVisibleTasks[date].map((task) => renderTaskCard(task))}
+                    </div>
+                  </section>
+                ))}
+              </div>
+            ) : tasksLoading ? (
               <section className="empty-state">
                 <h2>Cargando tareas...</h2>
                 <p>Estamos trayendo tus actividades.</p>
@@ -700,129 +972,283 @@ function App() {
                 <p>Presiona el botón + para crear tu primera actividad.</p>
               </section>
             ) : (
-              <div className="task-grid">
-                {visibleTasks.map((task) => (
-                  <motion.div
-                    layoutId={`task-${task.id}`}
-                    whileHover={{ scale: 1.01 }}
-                    whileTap={{ scale: 0.98 }}
-                    className={`task-card ${task.priority.toLowerCase()} ${
-                      isExpired(task) ? "expired" : ""
-                    }`}
-                    key={task.id}
-                    onClick={() => setSelectedTask(task)}
-                  >
-                    <img
-                      className="task-cover"
-                      src={getCover(task)}
-                      alt={task.title}
-                    />
-
-                    <div className="task-body">
-                      <h3>{task.title}</h3>
-
-                      {task.type === "Universidad" && task.course ? (
-                        <p>{task.course}</p>
-                      ) : task.type === "Alekey" ? (
-                        <p>Alekey · {task.alekeyRole}</p>
-                      ) : (
-                        <p>{task.type}</p>
-                      )}
-
-                      <small>
-                        📅 {task.date || "Sin fecha"} ·{" "}
-                        {task.time || "Sin hora"}
-                      </small>
-
-                      {isExpired(task) && (
-                        <span className="expired-label">Vencida</span>
-                      )}
-
-                      <span
-                        className={`priority ${task.priority.toLowerCase()}`}
-                      >
-                        {task.priority}
-                      </span>
+              <>
+                {Object.keys(groupedVisibleTasks).map((date) => (
+                  <section key={date} className="date-group">
+                    <h2>{formatDateTitle(date)}</h2>
+                    <div className="task-grid">
+                      {groupedVisibleTasks[date].map((task) => renderTaskCard(task))}
                     </div>
-                  </motion.div>
+                  </section>
                 ))}
-              </div>
-            )}
 
-            {totalPages > 1 && (
-              <div className="pagination">
-                <button disabled={page === 1} onClick={() => setPage(page - 1)}>
-                  Anterior
-                </button>
+                {expiredTasks.length > 0 && (
+                  <section className="expired-section">
+                    <div className="expired-divider">
+                      <span>Vencidas ({expiredTasks.length})</span>
+                    </div>
 
-                <span>
-                  Página {page} de {totalPages}
-                </span>
+                    <button
+                      className="show-expired-btn"
+                      onClick={() => setShowExpired(!showExpired)}
+                    >
+                      {showExpired ? "Ocultar vencidas" : "Ver vencidas"}
+                    </button>
 
-                <button
-                  disabled={page === totalPages}
-                  onClick={() => setPage(page + 1)}
-                >
-                  Siguiente
-                </button>
-              </div>
+                    {showExpired &&
+                      Object.keys(groupedExpiredTasks).map((date) => (
+                        <section key={date} className="date-group">
+                          <h2>{formatDateTitle(date)}</h2>
+                          <div className="task-grid">
+                            {groupedExpiredTasks[date].map((task) =>
+                              renderTaskCard(task)
+                            )}
+                          </div>
+                        </section>
+                      ))}
+                  </section>
+                )}
+
+                {totalPages > 1 && (
+                  <div className="pagination">
+                    <button disabled={page === 1} onClick={() => setPage(page - 1)}>
+                      Anterior
+                    </button>
+
+                    <span>
+                      Página {page} de {totalPages}
+                    </span>
+
+                    <button
+                      disabled={page === totalPages}
+                      onClick={() => setPage(page + 1)}
+                    >
+                      Siguiente
+                    </button>
+                  </div>
+                )}
+              </>
             )}
           </>
         )}
 
-        {view === "Calendario" && (
-          <div className="placeholder">
-            <CalendarDays size={58} />
-            <h2>Calendario</h2>
-            <p>Próximamente verás tus tareas por fecha.</p>
-          </div>
+        {view === "Herramientas" && (
+          <section className="tools-grid">
+            <div className="tool-card">
+              <Calculator size={38} />
+              <h2>Conversor de notas</h2>
+
+              <input
+                placeholder="Puntos obtenidos"
+                value={gradeScore}
+                onChange={(e) => setGradeScore(e.target.value)}
+              />
+
+              <input
+                placeholder="Puntos totales"
+                value={gradeTotal}
+                onChange={(e) => setGradeTotal(e.target.value)}
+              />
+
+              <div className="grade-result">
+                {gradeResult ? `${gradeResult}%` : "Resultado"}
+              </div>
+            </div>
+
+            <div className="tool-card">
+              <NotebookText size={38} />
+              <h2>Bloc de notas rápidas</h2>
+
+              <textarea
+                value={toolsData.quickNote || ""}
+                onChange={(e) =>
+                  setToolsData({ ...toolsData, quickNote: e.target.value })
+                }
+                placeholder="Escribe ideas, pendientes rápidos o recordatorios..."
+              />
+
+              <button className="save-btn" onClick={saveQuickNote}>
+                <Save size={18} />
+                Guardar nota
+              </button>
+            </div>
+          </section>
         )}
 
         {view === "Progreso" && (
-          <div className="placeholder">
-            <BarChart3 size={58} />
-            <h2>Progreso</h2>
-            <p>Próximamente verás estadísticas.</p>
-          </div>
+          <section className="progress-page">
+            <div className="progress-card">
+              <h2>Gráfico semanal</h2>
+
+              <div className="weekly-chart">
+                {weeklyStats.map((item) => (
+                  <div className="bar-item" key={item.label}>
+                    <div
+                      className="bar"
+                      style={{ height: `${(item.count / maxWeekly) * 120 + 12}px` }}
+                    />
+                    <span>{item.label}</span>
+                    <small>{item.count}</small>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="progress-card">
+              <h2>Tareas por categoría</h2>
+
+              {categoryStats.map((item) => (
+                <div className="category-row" key={item.category}>
+                  <span>{item.category}</span>
+                  <strong>{item.count}</strong>
+                </div>
+              ))}
+            </div>
+
+            <div className="progress-card">
+              <h2>Próximas entregas</h2>
+
+              {activeTasks.slice(0, 5).map((task) => (
+                <div className="next-task" key={task.id}>
+                  <strong>{task.title}</strong>
+                  <span>{formatDateTitle(task.date)}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="progress-card">
+              <h2>Horas trabajadas Alekey</h2>
+              <div className="hours-total">{totalAlekeyHours.toFixed(2)} h</div>
+            </div>
+          </section>
         )}
 
-        {view === "Más" && (
-          <div className="placeholder">
-            <Settings size={58} />
-            <h2>Más opciones</h2>
-            <p>Configuración y conexión con Google más adelante.</p>
-          </div>
+        {view === "Cuentas" && (
+          <section className="accounts-page">
+            {!accountsUnlocked ? (
+            <div className="lock-card">
+              <Lock size={54} />
+              <h2>Cuentas protegidas</h2>
+              <p>Introduce la contraseña maestra o usa la huella / Passkey.</p>
+
+              <input
+                type="password"
+                placeholder="Contraseña maestra"
+                value={masterInput}
+                onChange={(e) => setMasterInput(e.target.value)}
+              />
+
+              <button className="save-btn" onClick={unlockAccounts}>
+                Desbloquear
+              </button>
+
+              {securityData.passkeyCredentialId ? (
+                <button className="passkey-btn" onClick={unlockAccountsWithPasskey}>
+                  Desbloquear con huella / Passkey
+                </button>
+              ) : (
+                <button className="passkey-btn" onClick={registerPasskeyForAccounts}>
+                  Registrar huella / Passkey
+                </button>
+              )}
+            </div>
+            ) : (
+              <>
+                <div className="accounts-header">
+                  <div>
+                    <h2>Cuentas</h2>
+                    <p>Desbloqueado por 5 minutos.</p>
+                  </div>
+
+                  <button
+                    className="add-segment-btn"
+                    onClick={() => setShowAccountModal(true)}
+                  >
+                    + Agregar
+                  </button>
+                </div>
+
+                <div className="accounts-list">
+                  {accounts.length === 0 ? (
+                    <div className="empty-private">
+                      No tienes cuentas guardadas todavía.
+                    </div>
+                  ) : (
+                    accounts.map((account) => (
+                      <div className="account-card" key={account.id}>
+                        <div className="account-title-row">
+                          <h3>{account.title}</h3>
+
+                          <button
+                            onClick={() =>
+                              setVisibleAccountId(
+                                visibleAccountId === account.id ? null : account.id
+                              )
+                            }
+                          >
+                            {visibleAccountId === account.id ? <EyeOff /> : <Eye />}
+                          </button>
+                        </div>
+
+                        {visibleAccountId === account.id ? (
+                          <div className="account-data">
+                            <p>Usuario: {account.username || "—"}</p>
+                            <p>Cédula: {account.cedula || "—"}</p>
+                            <p>Correo: {account.email || "—"}</p>
+                            <p>User: {account.user || "—"}</p>
+                            <p>Contraseña: {account.password || "—"}</p>
+                            <p>PIN: {account.pin || "—"}</p>
+                          </div>
+                        ) : (
+                          <p className="censored">Información oculta •••••••</p>
+                        )}
+
+                        <button
+                          className="delete-mini-btn"
+                          onClick={() => deleteAccount(account.id)}
+                        >
+                          Eliminar
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </>
+            )}
+          </section>
         )}
       </main>
 
-      <button
-        className="fab"
-        onClick={() => {
-          setEditing(false);
-          setOriginalForm(null);
-          setForm(emptyForm);
-          setErrors({});
-          setShowModal(true);
-        }}
-      >
-        <Plus size={38} strokeWidth={4} />
-      </button>
+      {view === "Inicio" && (
+        <button
+          className="fab"
+          onClick={() => {
+            setEditing(false);
+            setOriginalForm(null);
+            setForm(emptyForm);
+            setErrors({});
+            setShowModal(true);
+          }}
+        >
+          <Plus size={38} strokeWidth={4} />
+        </button>
+      )}
 
       <nav className="bottom-nav">
-        <button onClick={() => setView("Lista")}>
-          <ListTodo /> Lista
+        <button onClick={() => setView("Inicio")}>
+          <ListTodo /> Inicio
         </button>
 
-        <button onClick={() => setView("Calendario")}>
-          <CalendarDays /> Calendario
+        <button onClick={() => setView("Herramientas")}>
+          <NotebookText /> Herramientas
         </button>
 
         <button onClick={() => setView("Progreso")}>
           <BarChart3 /> Progreso
         </button>
 
-        <button onClick={() => setView("Más")}>
-          <Settings /> Más
+        <button onClick={() => setView("Cuentas")}>
+          <Lock /> Cuentas
         </button>
       </nav>
 
@@ -834,10 +1260,7 @@ function App() {
               className="detail-card"
               onClick={(e) => e.stopPropagation()}
             >
-              <button
-                className="close-btn"
-                onClick={() => setSelectedTask(null)}
-              >
+              <button className="close-btn" onClick={() => setSelectedTask(null)}>
                 <X />
               </button>
 
@@ -847,15 +1270,11 @@ function App() {
                 alt={selectedTask.title}
               />
 
-              <span
-                className={`priority ${selectedTask.priority.toLowerCase()}`}
-              >
+              <span className={`priority ${selectedTask.priority.toLowerCase()}`}>
                 {selectedTask.priority}
               </span>
 
-              {isExpired(selectedTask) && (
-                <span className="expired-label">Vencida</span>
-              )}
+              {isExpired(selectedTask) && <span className="expired-label">Vencida</span>}
 
               <h2>{selectedTask.title}</h2>
               <p className="type">{selectedTask.type}</p>
@@ -892,8 +1311,7 @@ function App() {
                       </p>
 
                       <p>
-                        <strong>Total:</strong> ₡{getPayment(selectedTask)}{" "}
-                        colones
+                        <strong>Total:</strong> ₡{getPayment(selectedTask)} colones
                       </p>
                     </>
                   )}
@@ -952,9 +1370,7 @@ function App() {
                       <input
                         type="checkbox"
                         checked={item.done}
-                        onChange={() =>
-                          toggleChecklistItem(selectedTask.id, index)
-                        }
+                        onChange={() => toggleChecklistItem(selectedTask.id, index)}
                       />
                       <span>{item.text}</span>
                     </label>
@@ -963,10 +1379,7 @@ function App() {
               )}
 
               <div className="detail-actions">
-                <button
-                  className="edit-btn"
-                  onClick={() => openEdit(selectedTask)}
-                >
+                <button className="edit-btn" onClick={() => openEdit(selectedTask)}>
                   <Pencil size={18} />
                   Editar
                 </button>
@@ -1003,9 +1416,7 @@ function App() {
                 value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })}
               />
-              {errors.title && (
-                <span className="field-error">{errors.title}</span>
-              )}
+              {errors.title && <span className="field-error">{errors.title}</span>}
 
               <select
                 value={form.type}
@@ -1034,9 +1445,7 @@ function App() {
               {form.type === "Universidad" && (
                 <select
                   value={form.course}
-                  onChange={(e) =>
-                    setForm({ ...form, course: e.target.value })
-                  }
+                  onChange={(e) => setForm({ ...form, course: e.target.value })}
                 >
                   {UNIVERSITY_COURSES.map((course) => (
                     <option key={course}>{course}</option>
@@ -1047,9 +1456,7 @@ function App() {
               {form.type === "Alekey" && (
                 <select
                   value={form.alekeyRole}
-                  onChange={(e) =>
-                    setForm({ ...form, alekeyRole: e.target.value })
-                  }
+                  onChange={(e) => setForm({ ...form, alekeyRole: e.target.value })}
                 >
                   <option>Encargado</option>
                   <option>Trabajador</option>
@@ -1059,9 +1466,7 @@ function App() {
               <textarea
                 placeholder="Descripción"
                 value={form.description}
-                onChange={(e) =>
-                  setForm({ ...form, description: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
               />
               {errors.description && (
                 <span className="field-error">{errors.description}</span>
@@ -1078,9 +1483,7 @@ function App() {
                   })
                 }
               />
-              {errors.date && (
-                <span className="field-error">{errors.date}</span>
-              )}
+              {errors.date && <span className="field-error">{errors.date}</span>}
 
               {form.type === "Alekey" && form.alekeyRole === "Trabajador" ? (
                 <>
@@ -1099,16 +1502,11 @@ function App() {
                       <input
                         type="time"
                         value={segment.end}
-                        onChange={(e) =>
-                          updateSegment(index, "end", e.target.value)
-                        }
+                        onChange={(e) => updateSegment(index, "end", e.target.value)}
                       />
 
                       {form.workSegments.length > 1 && (
-                        <button
-                          type="button"
-                          onClick={() => removeSegment(index)}
-                        >
+                        <button type="button" onClick={() => removeSegment(index)}>
                           Quitar
                         </button>
                       )}
@@ -1132,23 +1530,18 @@ function App() {
                   <input
                     placeholder="Horas totales"
                     value={form.totalHours}
-                    onChange={(e) =>
-                      setForm({ ...form, totalHours: e.target.value })
-                    }
+                    onChange={(e) => setForm({ ...form, totalHours: e.target.value })}
                   />
 
                   <input
                     placeholder="Pago por hora en colones"
                     value={form.hourlyRate}
-                    onChange={(e) =>
-                      setForm({ ...form, hourlyRate: e.target.value })
-                    }
+                    onChange={(e) => setForm({ ...form, hourlyRate: e.target.value })}
                   />
 
                   <div className="payment-preview">
                     Total aproximado: ₡
-                    {Number(form.totalHours || 0) *
-                      Number(form.hourlyRate || 0)}{" "}
+                    {Number(form.totalHours || 0) * Number(form.hourlyRate || 0)}{" "}
                     colones
                   </div>
                 </>
@@ -1157,21 +1550,15 @@ function App() {
                   <input
                     type="time"
                     value={form.time}
-                    onChange={(e) =>
-                      setForm({ ...form, time: e.target.value })
-                    }
+                    onChange={(e) => setForm({ ...form, time: e.target.value })}
                   />
-                  {errors.time && (
-                    <span className="field-error">{errors.time}</span>
-                  )}
+                  {errors.time && <span className="field-error">{errors.time}</span>}
                 </>
               )}
 
               <select
                 value={form.priority}
-                onChange={(e) =>
-                  setForm({ ...form, priority: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, priority: e.target.value })}
               >
                 <option>Baja</option>
                 <option>Media</option>
@@ -1182,17 +1569,13 @@ function App() {
               <textarea
                 placeholder="Checklist, una línea por punto"
                 value={form.checklist}
-                onChange={(e) =>
-                  setForm({ ...form, checklist: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, checklist: e.target.value })}
               />
 
               <input
                 placeholder="Link de carpeta Drive principal (opcional)"
                 value={form.driveFolderUrl}
-                onChange={(e) =>
-                  setForm({ ...form, driveFolderUrl: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, driveFolderUrl: e.target.value })}
               />
 
               <h3 className="form-section-title">Links de recursos</h3>
@@ -1202,24 +1585,18 @@ function App() {
                   <input
                     placeholder="Nombre del recurso"
                     value={resource.name}
-                    onChange={(e) =>
-                      updateResource(index, "name", e.target.value)
-                    }
+                    onChange={(e) => updateResource(index, "name", e.target.value)}
                   />
 
                   <input
                     placeholder="Link de Google Drive, OneDrive, Moodle..."
                     value={resource.url}
-                    onChange={(e) =>
-                      updateResource(index, "url", e.target.value)
-                    }
+                    onChange={(e) => updateResource(index, "url", e.target.value)}
                   />
 
                   <select
                     value={resource.type}
-                    onChange={(e) =>
-                      updateResource(index, "type", e.target.value)
-                    }
+                    onChange={(e) => updateResource(index, "type", e.target.value)}
                   >
                     <option>PDF</option>
                     <option>DOCX</option>
@@ -1242,11 +1619,7 @@ function App() {
               ))}
 
               {form.resources.length < 3 && (
-                <button
-                  type="button"
-                  className="add-segment-btn"
-                  onClick={addResource}
-                >
+                <button type="button" className="add-segment-btn" onClick={addResource}>
                   + Agregar otro link
                 </button>
               )}
@@ -1254,6 +1627,87 @@ function App() {
               <button className="save-btn" onClick={saveTask}>
                 <Save size={18} />
                 {editing ? "Guardar cambios" : "Guardar actividad"}
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {showAccountModal && (
+          <motion.div className="overlay" onClick={() => setShowAccountModal(false)}>
+            <motion.div
+              className="modal"
+              initial={{ y: 80, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 80, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button className="back-btn" onClick={() => setShowAccountModal(false)}>
+                <X />
+              </button>
+
+              <h2>Nueva cuenta</h2>
+
+              <input
+                placeholder="Título"
+                value={accountForm.title}
+                onChange={(e) =>
+                  setAccountForm({ ...accountForm, title: e.target.value })
+                }
+              />
+              {accountErrors.title && (
+                <span className="field-error">{accountErrors.title}</span>
+              )}
+
+              <input
+                placeholder="Usuario"
+                value={accountForm.username}
+                onChange={(e) =>
+                  setAccountForm({ ...accountForm, username: e.target.value })
+                }
+              />
+
+              <input
+                placeholder="Cédula"
+                value={accountForm.cedula}
+                onChange={(e) =>
+                  setAccountForm({ ...accountForm, cedula: e.target.value })
+                }
+              />
+
+              <input
+                placeholder="Correo"
+                value={accountForm.email}
+                onChange={(e) =>
+                  setAccountForm({ ...accountForm, email: e.target.value })
+                }
+              />
+
+              <input
+                placeholder="User"
+                value={accountForm.user}
+                onChange={(e) =>
+                  setAccountForm({ ...accountForm, user: e.target.value })
+                }
+              />
+
+              <input
+                placeholder="Contraseña"
+                value={accountForm.password}
+                onChange={(e) =>
+                  setAccountForm({ ...accountForm, password: e.target.value })
+                }
+              />
+
+              <input
+                placeholder="PIN"
+                value={accountForm.pin}
+                onChange={(e) =>
+                  setAccountForm({ ...accountForm, pin: e.target.value })
+                }
+              />
+
+              <button className="save-btn" onClick={saveAccount}>
+                Guardar cuenta
               </button>
             </motion.div>
           </motion.div>
@@ -1268,11 +1722,7 @@ function App() {
               exit={{ scale: 0.85, opacity: 0, y: 20 }}
             >
               <div className="alert-icon">
-                {alertData.type === "success" ? (
-                  <CheckCircle2 />
-                ) : (
-                  <AlertTriangle />
-                )}
+                {alertData.type === "success" ? <CheckCircle2 /> : <AlertTriangle />}
               </div>
 
               <h3>{alertData.title}</h3>

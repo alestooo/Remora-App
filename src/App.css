@@ -871,6 +871,283 @@ select {
   background: linear-gradient(90deg, #ff4052, #b3122b);
 }
 
+.view-switch {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.view-switch button {
+  border: none;
+  background: #ffffff;
+  color: #171717;
+  padding: 12px 18px;
+  border-radius: 999px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.active-switch {
+  background: linear-gradient(135deg, #ef233c, #8d1023) !important;
+  color: white !important;
+}
+
+.date-group {
+  margin-bottom: 30px;
+}
+
+.date-group h2 {
+  color: white;
+  font-size: 26px;
+  margin: 12px 0 16px;
+  text-transform: capitalize;
+}
+
+.expired-section {
+  margin-top: 34px;
+}
+
+.expired-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9ca3af;
+  font-weight: 900;
+  margin: 24px 0 14px;
+}
+
+.expired-divider::before,
+.expired-divider::after {
+  content: "";
+  height: 1px;
+  background: rgba(255, 255, 255, 0.18);
+  flex: 1;
+  margin: 0 12px;
+}
+
+.show-expired-btn {
+  width: 100%;
+  border: none;
+  background: #2b2d36;
+  color: white;
+  border-radius: 18px;
+  padding: 14px;
+  font-weight: 900;
+  cursor: pointer;
+  margin-bottom: 18px;
+}
+
+.tools-grid,
+.progress-page,
+.accounts-page {
+  display: grid;
+  gap: 18px;
+}
+
+.tool-card,
+.progress-card,
+.lock-card,
+.account-card {
+  background: #111217;
+  color: white;
+  padding: 22px;
+  border-radius: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.tool-card input,
+.tool-card textarea,
+.lock-card input,
+.resource-box input,
+.resource-box select,
+.account-card input {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #1c1d24;
+  color: white;
+  border-radius: 17px;
+  padding: 14px;
+  margin-top: 10px;
+}
+
+.tool-card textarea {
+  min-height: 190px;
+  resize: vertical;
+}
+
+.grade-result,
+.hours-total {
+  margin-top: 14px;
+  background: rgba(34, 197, 94, 0.13);
+  color: #4ade80;
+  padding: 18px;
+  border-radius: 18px;
+  text-align: center;
+  font-weight: 900;
+  font-size: 28px;
+}
+
+.weekly-chart {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  height: 180px;
+  margin-top: 20px;
+}
+
+.bar-item {
+  flex: 1;
+  text-align: center;
+  color: #d1d5db;
+  font-weight: 800;
+}
+
+.bar {
+  width: 100%;
+  border-radius: 999px 999px 8px 8px;
+  background: linear-gradient(180deg, #ef233c, #6d1024);
+  margin-bottom: 8px;
+}
+
+.category-row,
+.next-task {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.accounts-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  background: #111217;
+  padding: 20px;
+  border-radius: 26px;
+}
+
+.accounts-list {
+  display: grid;
+  gap: 14px;
+}
+
+.lock-card {
+  text-align: center;
+  max-width: 460px;
+  margin: 0 auto;
+}
+
+.account-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.account-title-row button {
+  border: none;
+  background: #2b2d36;
+  color: white;
+  border-radius: 50%;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.account-data {
+  background: #1c1d24;
+  padding: 14px;
+  border-radius: 18px;
+  margin-top: 12px;
+}
+
+.censored {
+  color: #9ca3af;
+  font-weight: 900;
+}
+
+.delete-mini-btn {
+  border: none;
+  background: #ef4444;
+  color: white;
+  border-radius: 14px;
+  padding: 10px 12px;
+  font-weight: 900;
+  margin-top: 12px;
+  cursor: pointer;
+}
+
+.empty-private {
+  background: #111217;
+  padding: 22px;
+  border-radius: 24px;
+  color: #d1d5db;
+  text-align: center;
+}
+
+.resource-box {
+  display: grid;
+  gap: 10px;
+  background: #1c1d24;
+  padding: 14px;
+  border-radius: 18px;
+}
+
+.remove-resource-btn {
+  border: none;
+  background: #ef4444;
+  color: white;
+  border-radius: 14px;
+  padding: 12px;
+  cursor: pointer;
+  font-weight: 900;
+}
+
+.passkey-btn {
+  width: 100%;
+  border: none;
+  background: #ffffff;
+  color: #171717;
+  border-radius: 18px;
+  padding: 15px;
+  cursor: pointer;
+  font-weight: 900;
+  margin-top: 12px;
+}
+
+@media (max-width: 650px) {
+  .date-group h2 {
+    font-size: 22px;
+  }
+
+  .weekly-chart {
+    gap: 7px;
+  }
+
+  .accounts-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .view-switch {
+    width: 100%;
+  }
+
+  .view-switch button {
+    flex: 1;
+  }
+
+  .tool-card,
+  .progress-card,
+  .lock-card,
+  .account-card {
+    padding: 18px;
+  }
+}
+
 @media (max-width: 650px) {
   .work-segment {
     grid-template-columns: 1fr;
