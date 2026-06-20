@@ -33,6 +33,13 @@ import {
   Eye,
   EyeOff,
   Calculator,
+  BookOpen,
+  StickyNote,
+  UserPlus,
+  Users,
+  CircleDollarSign,
+  BadgeCheck,
+  BadgeX,
 } from "lucide-react";
 
 import icono from "./assets/icono.png";
@@ -61,6 +68,7 @@ const UNIVERSITY_COURSES = [
 const ITEMS_PER_PAGE = 10;
 const MASTER_PASSWORD = "Alekey149";
 const UNLOCK_TIME = 5 * 60 * 1000;
+const HOURLY_RATE = 1500;
 
 const isMobileDevice = () =>
   /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -111,6 +119,13 @@ const calculateHours = (segments) => {
   return Number(total.toFixed(2));
 };
 
+const calculateClientTotal = (products = []) => {
+  return products.reduce((sum, product) => {
+    const price = Number(product.price || 0);
+    return sum + price;
+  }, 0);
+};
+
 function App() {
   const emptyForm = {
     title: "",
@@ -139,6 +154,12 @@ function App() {
     pin: "",
   };
 
+  const emptyClientForm = {
+    name: "",
+    products: [{ name: "", price: "" }],
+    paid: false,
+  };
+
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [tasksLoading, setTasksLoading] = useState(false);
@@ -147,11 +168,13 @@ function App() {
   const [tasks, setTasks] = useState([]);
   const [toolsData, setToolsData] = useState({ quickNote: "" });
   const [accounts, setAccounts] = useState([]);
+  const [clients, setClients] = useState([]);
   const [securityData, setSecurityData] = useState({});
 
   const [filter, setFilter] = useState("Todas");
   const [page, setPage] = useState(1);
   const [showExpired, setShowExpired] = useState(false);
+  const [editingClient, setEditingClient] = useState(null);
 
   const [showModal, setShowModal] = useState(false);
   const [selectedTask, setSelectedTask] = useState(null);
@@ -169,8 +192,18 @@ function App() {
   const [masterInput, setMasterInput] = useState("");
   const [accountErrors, setAccountErrors] = useState({});
 
+  const [selectedTool, setSelectedTool] = useState(null);
+
   const [gradeScore, setGradeScore] = useState("");
   const [gradeTotal, setGradeTotal] = useState("");
+
+  const [calcA, setCalcA] = useState("");
+  const [calcB, setCalcB] = useState("");
+  const [calcOperation, setCalcOperation] = useState("+");
+
+  const [showClientModal, setShowClientModal] = useState(false);
+  const [clientForm, setClientForm] = useState(emptyClientForm);
+  const [clientErrors, setClientErrors] = useState({});
 
   const [errors, setErrors] = useState({});
   const [alertData, setAlertData] = useState(null);
@@ -178,6 +211,15 @@ function App() {
 
   const showAlert = (data) => setAlertData(data);
   const closeAlert = () => setAlertData(null);
+
+  const goToView = (nextView) => {
+    setView(nextView);
+    setSelectedTool(null);
+
+    setTimeout(() => {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }, 50);
+  };
 
   useEffect(() => {
     setMobilePasskeyAvailable(isMobileDevice());
@@ -251,7 +293,7 @@ function App() {
     return () => clearInterval(interval);
   }, [accountsUnlocked, accountsUnlockEnd, user]);
 
-  useEffect(() => {
+    useEffect(() => {
     if (!user) {
       setTasks([]);
       setSelectedTask(null);
@@ -335,6 +377,24 @@ function App() {
       }));
 
       setAccounts(userAccounts);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+  useEffect(() => {
+    if (!user) return;
+
+    const clientsRef = collection(db, "users", user.uid, "clients");
+    const q = query(clientsRef, orderBy("createdAt", "desc"));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const userClients = snapshot.docs.map((document) => ({
+        id: document.id,
+        ...document.data(),
+      }));
+
+      setClients(userClients);
     });
 
     return () => unsubscribe();
@@ -634,7 +694,7 @@ function App() {
     setErrors({});
   };
 
-  const deleteTask = (id) => {
+    const deleteTask = (id) => {
     showAlert({
       type: "danger",
       title: "Eliminar actividad",
@@ -754,6 +814,114 @@ function App() {
     });
   };
 
+  const calculateBasicResult = () => {
+    const a = Number(calcA);
+    const b = Number(calcB);
+
+    if (calcA === "" || calcB === "" || Number.isNaN(a) || Number.isNaN(b)) {
+      return "";
+    }
+
+    if (calcOperation === "+") return a + b;
+    if (calcOperation === "-") return a - b;
+    if (calcOperation === "×") return a * b;
+    if (calcOperation === "÷") return b === 0 ? "No válido" : a / b;
+
+    return "";
+  };
+
+  const clearCalculator = () => {
+    setCalcA("");
+    setCalcB("");
+    setCalcOperation("+");
+  };
+
+  const addClientProduct = () => {
+    setClientForm({
+      ...clientForm,
+      products: [...clientForm.products, { name: "", price: "" }],
+    });
+  };
+
+  const updateClientProduct = (index, field, value) => {
+    setClientForm({
+      ...clientForm,
+      products: clientForm.products.map((product, i) =>
+        i === index ? { ...product, [field]: value } : product
+      ),
+    });
+  };
+
+  const removeClientProduct = (index) => {
+    setClientForm({
+      ...clientForm,
+      products:
+        clientForm.products.length > 1
+          ? clientForm.products.filter((_, i) => i !== index)
+          : [{ name: "", price: "" }],
+    });
+  };
+
+const saveClient = async () => {
+  const newErrors = {};
+
+  if (!clientForm.name.trim()) {
+    newErrors.name = "Agrega el nombre de la persona.";
+  }
+
+  setClientErrors(newErrors);
+  if (Object.keys(newErrors).length > 0) return;
+
+  const cleanedProducts = clientForm.products.filter(
+    (product) => product.name.trim() || product.price.trim()
+  );
+
+  if (editingClient) {
+    await updateDoc(doc(db, "users", user.uid, "clients", editingClient), {
+      ...clientForm,
+      products: cleanedProducts,
+      total: calculateClientTotal(cleanedProducts),
+      updatedAt: serverTimestamp(),
+    });
+  } else {
+    const clientRef = doc(collection(db, "users", user.uid, "clients"));
+
+    await setDoc(clientRef, {
+      ...clientForm,
+      products: cleanedProducts,
+      total: calculateClientTotal(cleanedProducts),
+      id: clientRef.id,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  }
+
+  setEditingClient(null);
+  setClientForm(emptyClientForm);
+  setShowClientModal(false);
+};
+
+  const toggleClientPaid = async (client) => {
+    await updateDoc(doc(db, "users", user.uid, "clients", client.id), {
+      paid: !client.paid,
+      updatedAt: serverTimestamp(),
+    });
+  };
+
+const deleteClient = async (id) => {
+  showAlert({
+    type: "danger",
+    title: "Eliminar cliente",
+    message: "¿Seguro que quieres eliminar este cliente?",
+    confirmText: "Sí, eliminar",
+    cancelText: "Cancelar",
+    onConfirm: async () => {
+      await deleteDoc(doc(db, "users", user.uid, "clients", id));
+      closeAlert();
+    },
+  });
+};
+
   const unlockAccountsSession = () => {
     const endTime = Date.now() + UNLOCK_TIME;
 
@@ -835,7 +1003,7 @@ function App() {
     }
   };
 
-    const saveAccount = async () => {
+  const saveAccount = async () => {
     const newErrors = {};
 
     if (!accountForm.title.trim()) {
@@ -859,45 +1027,56 @@ function App() {
   };
 
   const deleteAccount = async (id) => {
-    await deleteDoc(doc(db, "users", user.uid, "accounts", id));
+    showAlert({
+      type: "danger",
+      title: "Eliminar cuenta",
+      message:
+        "¿Seguro que quieres eliminar esta cuenta? Esta acción no se puede deshacer.",
+      confirmText: "Sí, eliminar",
+      cancelText: "Cancelar",
+      onConfirm: async () => {
+        await deleteDoc(doc(db, "users", user.uid, "accounts", id));
+        closeAlert();
+      },
+    });
   };
 
-const handleEyeClick = async (accountId) => {
-  if (visibleAccountId === accountId) {
-    setVisibleAccountId(null);
-    return;
-  }
-
-  if (mobilePasskeyAvailable && securityData.passkeyCredentialId) {
-    try {
-      await unlockWithPasskey(securityData.passkeyCredentialId);
-      setVisibleAccountId(accountId);
-    } catch {
-      showAlert({
-        type: "warning",
-        title: "No se pudo verificar",
-        message: "No se pudo mostrar la información protegida.",
-        confirmText: "Entendido",
-        onlyConfirm: true,
-        onConfirm: closeAlert,
-      });
+  const handleEyeClick = async (accountId) => {
+    if (visibleAccountId === accountId) {
+      setVisibleAccountId(null);
+      return;
     }
 
-    return;
-  }
+    if (mobilePasskeyAvailable && securityData.passkeyCredentialId) {
+      try {
+        await unlockWithPasskey(securityData.passkeyCredentialId);
+        setVisibleAccountId(accountId);
+      } catch {
+        showAlert({
+          type: "warning",
+          title: "No se pudo verificar",
+          message: "No se pudo mostrar la información protegida.",
+          confirmText: "Entendido",
+          onlyConfirm: true,
+          onConfirm: closeAlert,
+        });
+      }
 
-  setPasswordInput("");
+      return;
+    }
 
-  showAlert({
-    type: "password",
-    title: "Ver cuenta",
-    message: "Introduce la contraseña maestra para ver la información.",
-    confirmText: "Ver cuenta",
-    cancelText: "Cancelar",
-    accountId,
-    onConfirm: null,
-  });
-};
+    setPasswordInput("");
+
+    showAlert({
+      type: "password",
+      title: "Ver cuenta",
+      message: "Introduce la contraseña maestra para ver la información.",
+      confirmText: "Ver cuenta",
+      cancelText: "Cancelar",
+      accountId,
+      onConfirm: null,
+    });
+  };
 
   const gradeResult =
     gradeScore && gradeTotal
@@ -936,6 +1115,14 @@ const handleEyeClick = async (accountId) => {
     (sum, task) => sum + Number(task.totalHours || 0),
     0
   );
+
+  const pendingClients = clients.filter((client) => !client.paid);
+  const pendingClientsTotal = pendingClients.reduce(
+    (sum, client) => sum + Number(client.total || calculateClientTotal(client.products)),
+    0
+  );
+
+  const alekeySalaryTotal = totalAlekeyHours * HOURLY_RATE;
 
   if (authLoading) {
     return (
@@ -1002,7 +1189,7 @@ const handleEyeClick = async (accountId) => {
     </motion.div>
   );
 
-  return (
+    return (
     <div className="app">
       <header className="header">
         <div className="header-top">
@@ -1055,6 +1242,7 @@ const handleEyeClick = async (accountId) => {
                   onClick={() => {
                     setFilter(item);
                     setPage(1);
+                    window.scrollTo({ top: 0, behavior: "smooth" });
                   }}
                 >
                   {item === "Tarea" ? "Tareas" : item}
@@ -1067,23 +1255,24 @@ const handleEyeClick = async (accountId) => {
                 <h2>Cargando tareas...</h2>
                 <p>Estamos trayendo tus actividades.</p>
               </section>
-            ) : visibleTasks.length === 0 ? (
+            ) : visibleTasks.length === 0 && expiredTasks.length === 0 ? (
               <section className="empty-state">
                 <h2>No tienes tareas todavía</h2>
                 <p>Presiona el botón + para crear tu primera actividad.</p>
               </section>
             ) : (
               <>
-                {Object.keys(groupedVisibleTasks).map((date) => (
-                  <section key={date} className="date-group">
-                    <h2>{formatDateTitle(date)}</h2>
-                    <div className="task-grid">
-                      {groupedVisibleTasks[date].map((task) =>
-                        renderTaskCard(task)
-                      )}
-                    </div>
-                  </section>
-                ))}
+                {visibleTasks.length > 0 &&
+                  Object.keys(groupedVisibleTasks).map((date) => (
+                    <section key={date} className="date-group">
+                      <h2>{formatDateTitle(date)}</h2>
+                      <div className="task-grid">
+                        {groupedVisibleTasks[date].map((task) =>
+                          renderTaskCard(task)
+                        )}
+                      </div>
+                    </section>
+                  ))}
 
                 {expiredTasks.length > 0 && (
                   <section className="expired-section">
@@ -1112,11 +1301,14 @@ const handleEyeClick = async (accountId) => {
                   </section>
                 )}
 
-                {totalPages > 1 && (
+                {totalPages > 1 && visibleTasks.length > 0 && (
                   <div className="pagination">
                     <button
                       disabled={page === 1}
-                      onClick={() => setPage(page - 1)}
+                      onClick={() => {
+                        setPage(page - 1);
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      }}
                     >
                       Anterior
                     </button>
@@ -1127,7 +1319,10 @@ const handleEyeClick = async (accountId) => {
 
                     <button
                       disabled={page === totalPages}
-                      onClick={() => setPage(page + 1)}
+                      onClick={() => {
+                        setPage(page + 1);
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      }}
                     >
                       Siguiente
                     </button>
@@ -1139,45 +1334,234 @@ const handleEyeClick = async (accountId) => {
         )}
 
         {view === "Herramientas" && (
-          <section className="tools-grid">
-            <div className="tool-card">
-              <Calculator size={38} />
-              <h2>Conversor de notas</h2>
-
-              <input
-                placeholder="Puntos obtenidos"
-                value={gradeScore}
-                onChange={(e) => setGradeScore(e.target.value)}
-              />
-
-              <input
-                placeholder="Puntos totales"
-                value={gradeTotal}
-                onChange={(e) => setGradeTotal(e.target.value)}
-              />
-
-              <div className="grade-result">
-                {gradeResult ? `${gradeResult}%` : "Resultado"}
+          <section className="tools-page">
+            {!selectedTool ? (
+              <div className="tools-app-grid">
+                {[
+                  {
+                    id: "calculator",
+                    title: "Calculadora",
+                    text: "Suma, resta, multiplica y divide.",
+                    icon: <Calculator />,
+                  },
+                  {
+                    id: "grades",
+                    title: "Conversor de notas",
+                    text: "Calcula porcentajes rápido.",
+                    icon: <BookOpen />,
+                  },
+                  {
+                    id: "notes",
+                    title: "Bloc de notas",
+                    text: "Notas rápidas guardadas.",
+                    icon: <StickyNote />,
+                  },
+                  {
+                    id: "clients",
+                    title: "Clientes",
+                    text: "Pendientes, productos y pagos.",
+                    icon: <UserPlus />,
+                  },
+                ].map((tool) => (
+                  <motion.button
+                    key={tool.id}
+                    className="tool-app-button"
+                    whileHover={{ scale: 1.03 }}
+                    whileTap={{ scale: 0.96 }}
+                    onClick={() => {
+                      setSelectedTool(tool.id);
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
+                  >
+                    <div className="tool-app-icon">{tool.icon}</div>
+                    <h3>{tool.title}</h3>
+                    <p>{tool.text}</p>
+                  </motion.button>
+                ))}
               </div>
-            </div>
+            ) : (
+              <motion.div
+                className="tool-inner"
+                initial={{ opacity: 0, y: 18 }}
+                animate={{ opacity: 1, y: 0 }}
+              >
+                <button
+                  className="back-btn"
+                  onClick={() => setSelectedTool(null)}
+                >
+                  <ArrowLeft />
+                </button>
 
-            <div className="tool-card">
-              <NotebookText size={38} />
-              <h2>Bloc de notas rápidas</h2>
+                {selectedTool === "calculator" && (
+                  <div className="tool-card">
+                    <Calculator size={38} />
+                    <h2>Calculadora</h2>
 
-              <textarea
-                value={toolsData.quickNote || ""}
-                onChange={(e) =>
-                  setToolsData({ ...toolsData, quickNote: e.target.value })
-                }
-                placeholder="Escribe ideas, pendientes rápidos o recordatorios..."
-              />
+                    <input
+                      placeholder="Primer número"
+                      value={calcA}
+                      onChange={(e) => setCalcA(e.target.value)}
+                    />
 
-              <button className="save-btn" onClick={saveQuickNote}>
-                <Save size={18} />
-                Guardar nota
-              </button>
-            </div>
+                    <select
+                      value={calcOperation}
+                      onChange={(e) => setCalcOperation(e.target.value)}
+                    >
+                      <option>+</option>
+                      <option>-</option>
+                      <option>×</option>
+                      <option>÷</option>
+                    </select>
+
+                    <input
+                      placeholder="Segundo número"
+                      value={calcB}
+                      onChange={(e) => setCalcB(e.target.value)}
+                    />
+
+                    <div className="grade-result">
+                      {calculateBasicResult() !== ""
+                        ? calculateBasicResult()
+                        : "Resultado"}
+                    </div>
+
+                    <button className="save-btn" onClick={clearCalculator}>
+                      Quitar todo
+                    </button>
+                  </div>
+                )}
+
+                {selectedTool === "grades" && (
+                  <div className="tool-card">
+                    <BookOpen size={38} />
+                    <h2>Conversor de notas</h2>
+
+                    <input
+                      placeholder="Puntos obtenidos"
+                      value={gradeScore}
+                      onChange={(e) => setGradeScore(e.target.value)}
+                    />
+
+                    <input
+                      placeholder="Puntos totales"
+                      value={gradeTotal}
+                      onChange={(e) => setGradeTotal(e.target.value)}
+                    />
+
+                    <div className="grade-result">
+                      {gradeResult ? `${gradeResult}%` : "Resultado"}
+                    </div>
+                  </div>
+                )}
+
+                {selectedTool === "notes" && (
+                  <div className="tool-card">
+                    <NotebookText size={38} />
+                    <h2>Bloc de notas rápidas</h2>
+
+                    <textarea
+                      value={toolsData.quickNote || ""}
+                      onChange={(e) =>
+                        setToolsData({
+                          ...toolsData,
+                          quickNote: e.target.value,
+                        })
+                      }
+                      placeholder="Escribe ideas, pendientes rápidos o recordatorios..."
+                    />
+
+                    <button className="save-btn" onClick={saveQuickNote}>
+                      <Save size={18} />
+                      Guardar nota
+                    </button>
+                  </div>
+                )}
+
+                {selectedTool === "clients" && (
+                  <div className="tool-card">
+                    <Users size={38} />
+                    <h2>Clientes pendientes</h2>
+
+                    <button
+                      className="save-btn"
+                      onClick={() => setShowClientModal(true)}
+                    >
+                      + Agregar persona
+                    </button>
+
+                  <div className="clients-list">
+                  {clients.length === 0 ? (
+                    <p className="empty-private">No tienes clientes agregados.</p>
+                  ) : (
+                    clients.map((client) => (
+                      <div className="client-card" key={client.id}>
+                        <div className="client-main">
+                          <button
+                            className={`client-check ${client.paid ? "paid" : ""}`}
+                            onClick={() => toggleClientPaid(client)}
+                          >
+                            {client.paid ? <BadgeCheck /> : <BadgeX />}
+                          </button>
+
+                          <div>
+                            <h3>{client.name}</h3>
+                            <p>
+                              Total: ₡
+                              {Number(
+                                client.total || calculateClientTotal(client.products)
+                              ).toLocaleString("es-CR")}
+                            </p>
+                          </div>
+                        </div>
+
+                        {client.products?.length > 0 && (
+                          <div className="client-products">
+                            {client.products.map((product, index) => (
+                              <span key={index}>
+                                {product.name || "Producto"}{" "}
+                                {product.price
+                                  ? `₡${Number(product.price).toLocaleString("es-CR")}`
+                                  : ""}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="client-actions">
+                          <button
+                            className="edit-mini-btn"
+                            onClick={() => {
+                              setEditingClient(client.id);
+                              setClientForm({
+                                name: client.name || "",
+                                products:
+                                  client.products?.length > 0
+                                    ? client.products
+                                    : [{ name: "", price: "" }],
+                                paid: client.paid || false,
+                              });
+                              setClientErrors({});
+                              setShowClientModal(true);
+                            }}
+                          >
+                            Editar
+                          </button>
+
+                          <button
+                            className="delete-mini-btn"
+                            onClick={() => deleteClient(client.id)}
+                          >
+                            Eliminar
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+                  </div>
+                )}
+              </motion.div>
+            )}
           </section>
         )}
 
@@ -1225,8 +1609,36 @@ const handleEyeClick = async (accountId) => {
             </div>
 
             <div className="progress-card">
+              <h2>Clientes pendientes de pagar</h2>
+
+              {pendingClients.length === 0 ? (
+                <p className="empty-private">No hay clientes pendientes.</p>
+              ) : (
+                pendingClients.map((client) => (
+                  <div className="next-task" key={client.id}>
+                    <strong>{client.name}</strong>
+                    <span>
+                      ₡
+                      {Number(
+                        client.total || calculateClientTotal(client.products)
+                      ).toLocaleString("es-CR")}
+                    </span>
+                  </div>
+                ))
+              )}
+
+              <div className="payment-preview">
+                Pendiente total: ₡{pendingClientsTotal.toLocaleString("es-CR")}
+              </div>
+            </div>
+
+            <div className="progress-card">
               <h2>Horas trabajadas Alekey</h2>
               <div className="hours-total">{totalAlekeyHours.toFixed(2)} h</div>
+              <p className="salary-text">Salario fijo: ₡1.500 por hora</p>
+              <div className="payment-preview">
+                Total: ₡{alekeySalaryTotal.toLocaleString("es-CR")}
+              </div>
             </div>
           </section>
         )}
@@ -1234,44 +1646,53 @@ const handleEyeClick = async (accountId) => {
         {view === "Cuentas" && (
           <section className="accounts-page">
             {!accountsUnlocked ? (
-            <div className="lock-card">
-              <Lock size={54} />
-              <h2>Cuentas protegidas</h2>
+              <div className="lock-card">
+                <Lock size={54} />
+                <h2>Cuentas protegidas</h2>
 
-              {mobilePasskeyAvailable && securityData.passkeyCredentialId ? (
-                <p>Usa tu huella, rostro o PIN del dispositivo para entrar.</p>
-              ) : (
-                <p>
-                  Introduce la contraseña maestra
-                  {mobilePasskeyAvailable ? " o registra tu huella / Passkey." : "."}
-                </p>
-              )}
+                {mobilePasskeyAvailable && securityData.passkeyCredentialId ? (
+                  <p>Usa tu huella, rostro o PIN del dispositivo para entrar.</p>
+                ) : (
+                  <p>
+                    Introduce la contraseña maestra
+                    {mobilePasskeyAvailable
+                      ? " o registra tu huella / Passkey."
+                      : "."}
+                  </p>
+                )}
 
-              {(!mobilePasskeyAvailable || !securityData.passkeyCredentialId) && (
-                <>
-                  <input
-                    type="password"
-                    placeholder="Contraseña maestra"
-                    value={masterInput}
-                    onChange={(e) => setMasterInput(e.target.value)}
-                  />
+                {(!mobilePasskeyAvailable ||
+                  !securityData.passkeyCredentialId) && (
+                  <>
+                    <input
+                      type="password"
+                      placeholder="Contraseña maestra"
+                      value={masterInput}
+                      onChange={(e) => setMasterInput(e.target.value)}
+                    />
 
-                  <button className="save-btn" onClick={unlockAccounts}>
-                    Desbloquear
+                    <button className="save-btn" onClick={unlockAccounts}>
+                      Desbloquear
+                    </button>
+                  </>
+                )}
+
+                {mobilePasskeyAvailable && securityData.passkeyCredentialId ? (
+                  <button
+                    className="passkey-btn"
+                    onClick={unlockAccountsWithPasskey}
+                  >
+                    Desbloquear con huella / Passkey
                   </button>
-                </>
-              )}
-
-              {mobilePasskeyAvailable && securityData.passkeyCredentialId ? (
-                <button className="passkey-btn" onClick={unlockAccountsWithPasskey}>
-                  Desbloquear con huella / Passkey
-                </button>
-              ) : mobilePasskeyAvailable ? (
-                <button className="passkey-btn" onClick={registerPasskeyForAccounts}>
-                  Registrar huella / Passkey
-                </button>
-              ) : null}
-            </div>
+                ) : mobilePasskeyAvailable ? (
+                  <button
+                    className="passkey-btn"
+                    onClick={registerPasskeyForAccounts}
+                  >
+                    Registrar huella / Passkey
+                  </button>
+                ) : null}
+              </div>
             ) : (
               <>
                 <div className="accounts-header">
@@ -1356,19 +1777,19 @@ const handleEyeClick = async (accountId) => {
       )}
 
       <nav className="bottom-nav">
-        <button onClick={() => setView("Inicio")}>
+        <button onClick={() => goToView("Inicio")}>
           <ListTodo /> Inicio
         </button>
 
-        <button onClick={() => setView("Herramientas")}>
+        <button onClick={() => goToView("Herramientas")}>
           <NotebookText /> Herramientas
         </button>
 
-        <button onClick={() => setView("Progreso")}>
+        <button onClick={() => goToView("Progreso")}>
           <BarChart3 /> Progreso
         </button>
 
-        <button onClick={() => setView("Cuentas")}>
+        <button onClick={() => goToView("Cuentas")}>
           <Lock /> Cuentas
         </button>
       </nav>
@@ -1550,6 +1971,7 @@ const handleEyeClick = async (accountId) => {
                 value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })}
               />
+
               {errors.title && (
                 <span className="field-error">{errors.title}</span>
               )}
@@ -1610,6 +2032,7 @@ const handleEyeClick = async (accountId) => {
                   setForm({ ...form, description: e.target.value })
                 }
               />
+
               {errors.description && (
                 <span className="field-error">{errors.description}</span>
               )}
@@ -1625,6 +2048,7 @@ const handleEyeClick = async (accountId) => {
                   })
                 }
               />
+
               {errors.date && (
                 <span className="field-error">{errors.date}</span>
               )}
@@ -1708,6 +2132,7 @@ const handleEyeClick = async (accountId) => {
                       setForm({ ...form, time: e.target.value })
                     }
                   />
+
                   {errors.time && (
                     <span className="field-error">{errors.time}</span>
                   )}
@@ -1834,6 +2259,7 @@ const handleEyeClick = async (accountId) => {
                   setAccountForm({ ...accountForm, title: e.target.value })
                 }
               />
+
               {accountErrors.title && (
                 <span className="field-error">{accountErrors.title}</span>
               )}
@@ -1893,102 +2319,199 @@ const handleEyeClick = async (accountId) => {
           </motion.div>
         )}
 
-{alertData && (
-  <motion.div className="alert-overlay">
-    <motion.div
-      className={`custom-alert ${alertData.type}`}
-      initial={{ scale: 0.85, opacity: 0, y: 20 }}
-      animate={{ scale: 1, opacity: 1, y: 0 }}
-      exit={{ scale: 0.85, opacity: 0, y: 20 }}
-    >
-      <div className="alert-icon">
-        {alertData.type === "success" ? (
-          <CheckCircle2 />
-        ) : alertData.type === "password" ? (
-          <Lock />
-        ) : (
-          <AlertTriangle />
+        {showClientModal && (
+          <motion.div
+            className="overlay"
+            onClick={() => setShowClientModal(false)}
+          >
+            <motion.div
+              className="modal"
+              initial={{ y: 80, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 80, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                className="back-btn"
+                onClick={() => setShowClientModal(false)}
+              >
+                <X />
+              </button>
+
+              <h2>{editingClient ? "Editar cliente" : "Nuevo cliente"}</h2>
+
+              <input
+                placeholder="Nombre de la persona"
+                value={clientForm.name}
+                onChange={(e) =>
+                  setClientForm({ ...clientForm, name: e.target.value })
+                }
+              />
+
+              {clientErrors.name && (
+                <span className="field-error">{clientErrors.name}</span>
+              )}
+
+              <h3 className="form-section-title">Productos</h3>
+
+              {clientForm.products.map((product, index) => (
+                <div className="resource-box" key={index}>
+                  <input
+                    placeholder="Producto o detalle"
+                    value={product.name}
+                    onChange={(e) =>
+                      updateClientProduct(index, "name", e.target.value)
+                    }
+                  />
+
+                  <input
+                    placeholder="Precio opcional"
+                    value={product.price}
+                    onChange={(e) =>
+                      updateClientProduct(index, "price", e.target.value)
+                    }
+                  />
+
+                  {clientForm.products.length > 1 && (
+                    <button
+                      type="button"
+                      className="remove-resource-btn"
+                      onClick={() => removeClientProduct(index)}
+                    >
+                      Quitar
+                    </button>
+                  )}
+                </div>
+              ))}
+
+              <button
+                type="button"
+                className="add-segment-btn"
+                onClick={addClientProduct}
+              >
+                + Agregar producto
+              </button>
+
+              <label className="client-paid-toggle">
+                <input
+                  type="checkbox"
+                  checked={clientForm.paid}
+                  onChange={(e) =>
+                    setClientForm({ ...clientForm, paid: e.target.checked })
+                  }
+                />
+                Ya está pagado
+              </label>
+
+              <div className="payment-preview">
+                Total: ₡
+                {calculateClientTotal(clientForm.products).toLocaleString(
+                  "es-CR"
+                )}
+              </div>
+
+              <button className="save-btn" onClick={saveClient}>
+                {editingClient ? "Guardar cambios" : "Guardar cliente"}
+              </button>
+            </motion.div>
+          </motion.div>
         )}
-      </div>
 
-      <h3>{alertData.title}</h3>
+        {alertData && (
+          <motion.div className="alert-overlay">
+            <motion.div
+              className={`custom-alert ${alertData.type}`}
+              initial={{ scale: 0.85, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.85, opacity: 0, y: 20 }}
+            >
+              <div className="alert-icon">
+                {alertData.type === "success" ? (
+                  <CheckCircle2 />
+                ) : alertData.type === "password" ? (
+                  <Lock />
+                ) : (
+                  <AlertTriangle />
+                )}
+              </div>
 
-      <p>{alertData.message}</p>
+              <h3>{alertData.title}</h3>
+              <p>{alertData.message}</p>
 
-      {alertData.type === "password" && (
-        <input
-          className="alert-password-input"
-          type="password"
-          placeholder="Contraseña maestra"
-          value={passwordInput}
-          onChange={(e) => setPasswordInput(e.target.value)}
-          autoFocus
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              if (passwordInput === MASTER_PASSWORD) {
-                setVisibleAccountId(alertData.accountId);
-                setPasswordInput("");
-                closeAlert();
-              } else {
-                setPasswordInput("");
+              {alertData.type === "password" && (
+                <input
+                  className="alert-password-input"
+                  type="password"
+                  placeholder="Contraseña maestra"
+                  value={passwordInput}
+                  onChange={(e) => setPasswordInput(e.target.value)}
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      if (passwordInput === MASTER_PASSWORD) {
+                        setVisibleAccountId(alertData.accountId);
+                        setPasswordInput("");
+                        closeAlert();
+                      } else {
+                        setPasswordInput("");
 
-                showAlert({
-                  type: "warning",
-                  title: "Contraseña incorrecta",
-                  message:
-                    "No se pudo mostrar la información protegida.",
-                  confirmText: "Entendido",
-                  onlyConfirm: true,
-                  onConfirm: closeAlert,
-                });
-              }
-            }
-          }}
-        />
-      )}
+                        showAlert({
+                          type: "warning",
+                          title: "Contraseña incorrecta",
+                          message:
+                            "No se pudo mostrar la información protegida.",
+                          confirmText: "Entendido",
+                          onlyConfirm: true,
+                          onConfirm: closeAlert,
+                        });
+                      }
+                    }
+                  }}
+                />
+              )}
 
-      <div className="alert-actions">
-        {!alertData.onlyConfirm && (
-          <button className="alert-cancel" onClick={closeAlert}>
-            {alertData.cancelText || "Cancelar"}
-          </button>
+              <div className="alert-actions">
+                {!alertData.onlyConfirm && (
+                  <button className="alert-cancel" onClick={closeAlert}>
+                    {alertData.cancelText || "Cancelar"}
+                  </button>
+                )}
+
+                <button
+                  className="alert-confirm"
+                  onClick={() => {
+                    if (alertData.type === "password") {
+                      if (passwordInput === MASTER_PASSWORD) {
+                        setVisibleAccountId(alertData.accountId);
+                        setPasswordInput("");
+                        closeAlert();
+                        return;
+                      }
+
+                      setPasswordInput("");
+
+                      showAlert({
+                        type: "warning",
+                        title: "Contraseña incorrecta",
+                        message:
+                          "No se pudo mostrar la información protegida.",
+                        confirmText: "Entendido",
+                        onlyConfirm: true,
+                        onConfirm: closeAlert,
+                      });
+
+                      return;
+                    }
+
+                    alertData.onConfirm?.();
+                  }}
+                >
+                  {alertData.confirmText || "Aceptar"}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
         )}
-
-        <button
-          className="alert-confirm"
-          onClick={() => {
-            if (alertData.type === "password") {
-              if (passwordInput === MASTER_PASSWORD) {
-                setVisibleAccountId(alertData.accountId);
-                setPasswordInput("");
-                closeAlert();
-                return;
-              }
-
-              setPasswordInput("");
-
-              showAlert({
-                type: "warning",
-                title: "Contraseña incorrecta",
-                message:
-                  "No se pudo mostrar la información protegida.",
-                confirmText: "Entendido",
-                onlyConfirm: true,
-                onConfirm: closeAlert,
-              });
-
-              return;
-            }
-
-            alertData.onConfirm?.();
-          }}
-        >
-          {alertData.confirmText || "Aceptar"}
-        </button>
-      </div>
-    </motion.div>
-  </motion.div>
-)}
       </AnimatePresence>
     </div>
   );

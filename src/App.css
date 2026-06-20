@@ -404,6 +404,7 @@ select {
   align-items: center;
   gap: 8px;
   box-shadow: 0 12px 30px rgba(239, 35, 60, 0.28);
+  margin-top: 20px;
 }
 
 .image-upload {
@@ -1137,6 +1138,190 @@ select {
 
 .alert-password-input::placeholder{
     color:#a5a5a5;
+}
+
+.tools-page {
+  display: grid;
+  gap: 18px;
+}
+
+.tools-app-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.tool-app-button {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #111217;
+  color: white;
+  border-radius: 28px;
+  padding: 22px;
+  text-align: left;
+  cursor: pointer;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.18);
+}
+
+.tool-app-icon {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #ef233c, #7a1020);
+  margin-bottom: 16px;
+}
+
+.tool-app-icon svg {
+  width: 30px;
+  height: 30px;
+}
+
+.tool-app-button h3 {
+  margin: 0 0 6px;
+  font-size: 20px;
+}
+
+.tool-app-button p {
+  margin: 0;
+  color: #9ca3af;
+  font-weight: 700;
+}
+
+.tool-inner {
+  display: grid;
+  gap: 14px;
+}
+
+.tool-card select {
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #1c1d24;
+  color: white;
+  border-radius: 17px;
+  padding: 14px;
+  margin-top: 10px;
+}
+
+.clients-list {
+  display: grid;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.client-card {
+  background: #1c1d24;
+  border-radius: 22px;
+  padding: 16px;
+  display: grid;
+  gap: 12px;
+}
+
+.client-main {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.client-main h3 {
+  margin: 0 0 4px;
+}
+
+.client-main p {
+  margin: 0;
+  color: #d1d5db;
+  font-weight: 800;
+}
+
+.client-check {
+  border: none;
+  background: rgba(239, 68, 68, 0.16);
+  color: #fca5a5;
+  border-radius: 50%;
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+
+.client-check.paid {
+  background: rgba(34, 197, 94, 0.16);
+  color: #4ade80;
+}
+
+.client-products {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.client-products span {
+  background: rgba(255, 255, 255, 0.08);
+  color: #e5e7eb;
+  border-radius: 999px;
+  padding: 8px 10px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.client-paid-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: white;
+  font-weight: 900;
+}
+
+.salary-text {
+  color: #d1d5db;
+  font-weight: 900;
+  text-align: center;
+}
+
+.client-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.edit-mini-btn {
+  border: none;
+  background: rgba(59, 130, 246, 0.18);
+  color: #93c5fd;
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+@media (max-width: 650px) {
+  .tools-app-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .tool-app-button {
+    padding: 18px;
+    border-radius: 24px;
+  }
+
+  .tool-app-button h3 {
+    font-size: 16px;
+  }
+
+  .tool-app-button p {
+    font-size: 12px;
+  }
+
+  .tool-app-icon {
+    width: 46px;
+    height: 46px;
+    border-radius: 16px;
+  }
+
+  .client-main {
+    align-items: flex-start;
+  }
 }
 
 @media (max-width: 650px) {
