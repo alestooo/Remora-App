@@ -1294,6 +1294,34 @@ select {
   cursor: pointer;
 }
 
+.disabled-card {
+  opacity: 0.65;
+}
+
+.disabled-btn {
+  background: #3a3a3a !important;
+  color: #aaa !important;
+  cursor: not-allowed !important;
+  box-shadow: none !important;
+}
+
+.task-progress-toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 0;
+}
+
+.progress-toggle-text {
+  font-weight: 800;
+  color: #d1d5db;
+  margin: 0;
+}
+
+.detail-card .client-check {
+  margin-top: 0;
+}
+
 @media (max-width: 650px) {
   .tools-app-grid {
     grid-template-columns: 1fr 1fr;

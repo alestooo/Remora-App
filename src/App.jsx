@@ -137,6 +137,8 @@ function App() {
     date: "",
     time: "",
     priority: "Media",
+    progressActive: true,
+    hoursActive: true,
     checklist: "",
     resources: [{ name: "", url: "", type: "PDF" }],
     driveFolderUrl: "",
@@ -616,6 +618,7 @@ const enableNotifications = async () => {
       date: form.date,
       time: form.time,
       priority: form.priority,
+      progressActive: form.progressActive ?? true,
       resources: form.resources.filter(
         (resource) => resource.name.trim() && resource.url.trim()
       ),
@@ -630,6 +633,10 @@ const enableNotifications = async () => {
         form.type === "Alekey" && form.alekeyRole === "Trabajador"
           ? form.hourlyRate
           : "",
+      hoursActive:
+        form.type === "Alekey" && form.alekeyRole === "Trabajador"
+          ? form.hoursActive ?? true
+          : true,
       updatedAt: serverTimestamp(),
     };
 
@@ -691,7 +698,7 @@ const enableNotifications = async () => {
   };
 
   const openEdit = (task) => {
-    const editForm = {
+      const editForm = {
       title: task.title,
       type: task.type,
       course: task.course || "Pensamiento Crítico",
@@ -700,6 +707,8 @@ const enableNotifications = async () => {
       date: task.date,
       time: task.time,
       priority: task.priority,
+      progressActive: task.progressActive ?? true,
+      hoursActive: task.hoursActive ?? true,
       resources: task.resources?.length
         ? task.resources
         : [{ name: "", url: "", type: "PDF" }],
@@ -1136,10 +1145,13 @@ const deleteClient = async (id) => {
 
   const maxWeekly = Math.max(...weeklyStats.map((item) => item.count), 1);
 
-  const totalAlekeyHours = tasks.reduce(
-    (sum, task) => sum + Number(task.totalHours || 0),
-    0
-  );
+    const totalAlekeyHours = tasks.reduce((sum, task) => {
+      if (task.type !== "Alekey") return sum;
+      if (task.alekeyRole !== "Trabajador") return sum;
+      if (task.hoursActive === false) return sum;
+
+      return sum + Number(task.totalHours || 0);
+    }, 0);
 
   const pendingClients = clients.filter((client) => !client.paid);
   const pendingClientsTotal = pendingClients.reduce(
@@ -1611,14 +1623,14 @@ const deleteClient = async (id) => {
               </div>
             </div>
 
-              <div className="progress-card">
-                <h2>Notificaciones</h2>
-                <p>Activa recordatorios automáticos para tus tareas.</p>
+          <div className="progress-card disabled-card">
+            <h2>Notificaciones (Próximamente)</h2>
+            <p>Los recordatorios automáticos estarán disponibles después.</p>
 
-                <button className="save-btn" onClick={enableNotifications}>
-                  🔔 Activar notificaciones
-                </button>
-              </div>
+            <button className="save-btn disabled-btn" disabled>
+              🔔 Activar notificaciones
+            </button>
+          </div>
 
             <div className="progress-card">
               <h2>Tareas por categoría</h2>
@@ -1634,12 +1646,19 @@ const deleteClient = async (id) => {
             <div className="progress-card">
               <h2>Próximas entregas</h2>
 
-              {activeTasks.slice(0, 5).map((task) => (
-                <div className="next-task" key={task.id}>
-                  <strong>{task.title}</strong>
-                  <span>{formatDateTitle(task.date)}</span>
-                </div>
-              ))}
+              {activeTasks.filter((task) => task.progressActive !== false).length === 0 ? (
+                <p className="empty-private">No hay próximas entregas activas.</p>
+              ) : (
+                activeTasks
+                  .filter((task) => task.progressActive !== false)
+                  .slice(0, 5)
+                  .map((task) => (
+                    <div className="next-task" key={task.id}>
+                      <strong>{task.title}</strong>
+                      <span>{formatDateTitle(task.date)}</span>
+                    </div>
+                  ))
+              )}
             </div>
 
             <div className="progress-card">
@@ -1860,6 +1879,36 @@ const deleteClient = async (id) => {
               )}
 
               <h2>{selectedTask.title}</h2>
+
+<div className="task-progress-toggle">
+  <button
+    className={`client-check ${
+      selectedTask.progressActive === false ? "" : "paid"
+    }`}
+    onClick={async () => {
+      const newValue = selectedTask.progressActive === false ? true : false;
+
+      await updateDoc(doc(db, "users", user.uid, "tasks", selectedTask.id), {
+        progressActive: newValue,
+        updatedAt: serverTimestamp(),
+      });
+
+      setSelectedTask({
+        ...selectedTask,
+        progressActive: newValue,
+      });
+    }}
+  >
+    {selectedTask.progressActive === false ? <BadgeX /> : <BadgeCheck />}
+  </button>
+
+  <p className="progress-toggle-text">
+    {selectedTask.progressActive === false
+      ? "No aparece en Progreso."
+      : "Sí aparece en Progreso."}
+  </p>
+</div>
+
               <p className="type">{selectedTask.type}</p>
 
               {selectedTask.type === "Universidad" && selectedTask.course && (
@@ -1901,6 +1950,35 @@ const deleteClient = async (id) => {
                   )}
                 </div>
               )}
+
+<div className="task-progress-toggle">
+  <button
+    className={`client-check ${
+      selectedTask.hoursActive === false ? "" : "paid"
+    }`}
+    onClick={async () => {
+      const newValue = selectedTask.hoursActive === false ? true : false;
+
+      await updateDoc(doc(db, "users", user.uid, "tasks", selectedTask.id), {
+        hoursActive: newValue,
+        updatedAt: serverTimestamp(),
+      });
+
+      setSelectedTask({
+        ...selectedTask,
+        hoursActive: newValue,
+      });
+    }}
+  >
+    {selectedTask.hoursActive === false ? <BadgeX /> : <BadgeCheck />}
+  </button>
+
+  <p className="progress-toggle-text">
+    {selectedTask.hoursActive === false
+      ? "Estas horas no cuentan en Progreso."
+      : "Estas horas sí cuentan en Progreso."}
+  </p>
+</div>
 
               <div className="date-box">
                 📅 {selectedTask.date || "Sin fecha"} ·{" "}
