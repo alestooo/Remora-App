@@ -13,6 +13,7 @@ import {
   serverTimestamp,
 } from "firebase/firestore";
 import { auth, provider, db } from "./firebase";
+import { requestNotificationPermission } from "./notifications";
 import { registerPasskey, unlockWithPasskey } from "./passkey";
 
 import {
@@ -422,6 +423,30 @@ function App() {
     setAccountsUnlocked(false);
     setVisibleAccountId(null);
   };
+
+const enableNotifications = async () => {
+  try {
+    await requestNotificationPermission(user);
+
+    showAlert({
+      type: "success",
+      title: "Notificaciones activadas",
+      message: "Remora ya puede enviarte recordatorios en este dispositivo.",
+      confirmText: "Listo",
+      onlyConfirm: true,
+      onConfirm: closeAlert,
+    });
+  } catch (error) {
+    showAlert({
+      type: "warning",
+      title: "No se pudieron activar",
+      message: error.message,
+      confirmText: "Entendido",
+      onlyConfirm: true,
+      onConfirm: closeAlert,
+    });
+  }
+};
 
   const getCover = (task) => DEFAULT_COVERS[task.type];
 
@@ -1585,6 +1610,15 @@ const deleteClient = async (id) => {
                 ))}
               </div>
             </div>
+
+              <div className="progress-card">
+                <h2>Notificaciones</h2>
+                <p>Activa recordatorios automáticos para tus tareas.</p>
+
+                <button className="save-btn" onClick={enableNotifications}>
+                  🔔 Activar notificaciones
+                </button>
+              </div>
 
             <div className="progress-card">
               <h2>Tareas por categoría</h2>

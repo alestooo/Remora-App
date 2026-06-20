@@ -16,11 +16,13 @@ export const requestNotificationPermission = async (user) => {
     throw new Error("No diste permiso para enviar notificaciones.");
   }
 
+  const registration = await navigator.serviceWorker.register(
+    "/firebase-messaging-sw.js"
+  );
+
   const token = await getToken(messaging, {
     vapidKey: VAPID_KEY,
-    serviceWorkerRegistration: await navigator.serviceWorker.register(
-      "/firebase-messaging-sw.js"
-    ),
+    serviceWorkerRegistration: registration,
   });
 
   await setDoc(
