@@ -44,18 +44,36 @@ import {
 } from "lucide-react";
 
 import icono from "./assets/icono.png";
-import alekeyCover from "./assets/alekey.png";
 
-const DEFAULT_COVERS = {
-  Universidad:
-    "https://ucenfotec.ac.cr/wp-content/uploads/2026/02/IMG_2934-scaled.jpg",
-  Trabajo:
-    "https://uni.edu.gt/wp-content/uploads/sites/19/2025/07/10-carreras-para-trabajar-desde-casa-en-linea1.jpg",
-  Tarea:
-    "https://s.yimg.com/ny/api/res/1.2/40N9VhmK.OU25e9Scggwzw--/YXBwaWQ9aGlnaGxhbmRlcjt3PTY0MDtoPTQyNw--/https://s.yimg.com/os/creatr-uploaded-images/2021-11/76209790-4eb4-11ec-966d-836e2fc9cbe0",
-  Recordatorio:
-    "https://i.pinimg.com/564x/00/96/fd/0096fd58a5460027271b2b1003986baf.jpg",
+import universidad from "./assets/covers/universidad.jpg";
+import universidad2 from "./assets/covers/universidad2.jpg";
+
+import trabajo from "./assets/covers/trabajo.jpg";
+import trabajo2 from "./assets/covers/trabajo2.jpg";
+
+import tarea from "./assets/covers/tarea.jpg";
+import tarea2 from "./assets/covers/tarea2.jpg";
+
+import recordatorio from "./assets/covers/recordatorio.jpg";
+import recordatorio2 from "./assets/covers/recordatorio2.jpg";
+
+import alekeyCover from "./assets/covers/alekey.png";
+import alekeyCover2 from "./assets/covers/alekey2.png";
+
+const DESKTOP_COVERS = {
+  Universidad: universidad,
+  Trabajo: trabajo,
+  Tarea: tarea,
+  Recordatorio: recordatorio,
   Alekey: alekeyCover,
+};
+
+const MOBILE_COVERS = {
+  Universidad: universidad2,
+  Trabajo: trabajo2,
+  Tarea: tarea2,
+  Recordatorio: recordatorio2,
+  Alekey: alekeyCover2,
 };
 
 const UNIVERSITY_COURSES = [
@@ -211,6 +229,20 @@ function App() {
   const [errors, setErrors] = useState({});
   const [alertData, setAlertData] = useState(null);
   const [passwordInput, setPasswordInput] = useState("");
+
+  const [isMobileCover, setIsMobileCover] = useState(window.innerWidth <= 768);
+
+useEffect(() => {
+  const handleResize = () => {
+    setIsMobileCover(window.innerWidth <= 768);
+  };
+
+  window.addEventListener("resize", handleResize);
+
+  return () => window.removeEventListener("resize", handleResize);
+}, []);
+
+const DEFAULT_COVERS = isMobileCover ? MOBILE_COVERS : DESKTOP_COVERS;
 
   const showAlert = (data) => setAlertData(data);
   const closeAlert = () => setAlertData(null);
