@@ -174,7 +174,7 @@ const calculateClientTotal = (products = []) => {
   }, 0);
 };
 
-function SortableNoteCard({ note, onOpen, formatNoteDate }) {
+function SortableNoteCard({ note, onOpen, notesReorderMode }) {
   const {
     attributes,
     listeners,
@@ -190,6 +190,14 @@ function SortableNoteCard({ note, onOpen, formatNoteDate }) {
     zIndex: isDragging ? 20 : "auto",
   };
 
+  const noteDate = note?.createdAt?.toDate
+    ? note.createdAt.toDate().toLocaleDateString("es-CR", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    : "Hoy";
+
   return (
     <motion.article
       ref={setNodeRef}
@@ -199,22 +207,28 @@ function SortableNoteCard({ note, onOpen, formatNoteDate }) {
       whileTap={{ scale: 0.98 }}
       className={`note-card ${note.color || "note-red"} ${
         isDragging ? "dragging" : ""
-      }`}
-      onClick={() => onOpen(note)}
+      } ${notesReorderMode ? "reorder-active" : ""}`}
+      onClick={() => {
+        if (notesReorderMode) return;
+        onOpen(note);
+      }}
     >
-      <button
-        className="note-drag-handle"
-        {...attributes}
-        {...listeners}
-        onClick={(event) => event.stopPropagation()}
-        aria-label="Mover nota"
-      >
-        <GripVertical size={18} />
-      </button>
+      {notesReorderMode && (
+        <button
+          className="note-drag-handle"
+          {...attributes}
+          {...listeners}
+          onClick={(event) => event.stopPropagation()}
+          aria-label="Mover nota"
+          type="button"
+        >
+          <GripVertical size={18} />
+        </button>
+      )}
 
       <div className="note-card-header">
         <span className="note-emoji">📝</span>
-        <small>{formatNoteDate(note)}</small>
+        <small>{noteDate}</small>
       </div>
 
       <h3>{note.title}</h3>
@@ -319,6 +333,7 @@ function App() {
   const [noteMode, setNoteMode] = useState("create");
   const [noteErrors, setNoteErrors] = useState({});
   const [notePage, setNotePage] = useState(1);
+  const [notesReorderMode, setNotesReorderMode] = useState(false);
 
   const [errors, setErrors] = useState({});
   const [alertData, setAlertData] = useState(null);
@@ -332,8 +347,8 @@ function App() {
     }),
     useSensor(TouchSensor, {
       activationConstraint: {
-        delay: 180,
-        tolerance: 6,
+        delay: 650,
+        tolerance: 8,
       },
     })
   );
@@ -1794,10 +1809,32 @@ function App() {
                         <p>Notas rápidas, simples y guardadas por usuario.</p>
                       </div>
 
-                      <button className="save-btn" onClick={openCreateNote}>
-                        <FilePlus2 size={18} />
-                        Nueva nota
-                      </button>
+                    <div className="notes-actions">
+
+                    <button
+                    className={`notes-reorder-btn ${
+                    notesReorderMode ? "active" : ""
+                    }`}
+                    onClick={()=>{
+                    setNotesReorderMode(!notesReorderMode);
+
+                    if(!notesReorderMode && navigator.vibrate){
+                    navigator.vibrate(40);
+                    }
+                    }}
+                    >
+                    {notesReorderMode ? "Listo" : "Ordenar"}
+                    </button>
+
+                    <button
+                    className="save-btn"
+                    onClick={openCreateNote}
+                    >
+                    <FilePlus2 size={18}/>
+                    Nueva nota
+                    </button>
+
+                    </div>
                     </div>
 
                     {notes.length === 0 ? (
@@ -1819,12 +1856,12 @@ function App() {
                           >
                             <div className="notes-grid">
                               {visibleNotes.map((note) => (
-                                <SortableNoteCard
-                                  key={note.id}
-                                  note={note}
-                                  onOpen={openViewNote}
-                                  formatNoteDate={formatNoteDate}
-                                />
+                            <SortableNoteCard
+                              key={note.id}
+                              note={note}
+                              onOpen={openViewNote}
+                              notesReorderMode={notesReorderMode}
+                            />
                               ))}
                             </div>
                           </SortableContext>

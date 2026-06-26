@@ -1564,6 +1564,47 @@ select {
   background: #4b5563;
 }
 
+.notes-actions{
+display:flex;
+gap:10px;
+flex-wrap:wrap;
+}
+
+.notes-reorder-btn{
+background:#272934;
+border:none;
+padding:12px 18px;
+border-radius:18px;
+color:#fff;
+font-weight:800;
+cursor:pointer;
+transition:.25s;
+}
+
+.notes-reorder-btn.active{
+background:#ef233c;
+}
+
+.note-card.reorder-active{
+animation:noteShake .18s infinite alternate;
+}
+
+.note-drag-handle{
+touch-action:none;
+}
+
+@keyframes noteShake{
+
+from{
+transform:rotate(-0.5deg);
+}
+
+to{
+transform:rotate(.5deg);
+}
+
+}
+
 @media (max-width: 900px) {
   .notes-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
