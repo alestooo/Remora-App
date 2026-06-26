@@ -59,6 +59,14 @@ import {
   BadgeX,
   GripVertical,
   FilePlus2,
+  Pin,
+  PinOff,
+  MoreHorizontal,
+  CheckSquare,
+  Type,
+  UserRound,
+  Search,
+  PlusCircle,
 } from "lucide-react";
 
 import icono from "./assets/icono.png";
@@ -113,6 +121,9 @@ const NOTE_COLORS = [
   "note-purple",
   "note-gray",
 ];
+
+const createNoteId = () =>
+  `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 const MASTER_PASSWORD = "Alekey149";
 const UNLOCK_TIME = 5 * 60 * 1000;
@@ -174,7 +185,17 @@ const calculateClientTotal = (products = []) => {
   }, 0);
 };
 
-function SortableNoteCard({ note, onOpen, notesReorderMode }) {
+function SortableNoteCard({
+  note,
+  onOpen,
+  notesReorderMode,
+  noteMenuId,
+  setNoteMenuId,
+  toggleNotePinned,
+  deleteNote,
+  openEditNote,
+  toggleChecklistItemInNote,
+}) {
   const {
     attributes,
     listeners,
@@ -197,6 +218,29 @@ function SortableNoteCard({ note, onOpen, notesReorderMode }) {
         year: "numeric",
       })
     : "Hoy";
+
+  const checklistBlocks = (note.blocks || []).filter(
+    (block) => block.type === "checklist"
+  );
+
+  const pendingBlocks = (note.blocks || []).filter(
+    (block) => block.type === "pending" && (block.person || block.amount)
+  );
+
+  const textBlocks = (note.blocks || []).filter(
+    (block) => block.type === "text" && block.text
+  );
+
+  const totalChecklistItems = checklistBlocks.reduce(
+    (sum, block) => sum + (block.items || []).length,
+    0
+  );
+
+  const completedChecklistItems = checklistBlocks.reduce(
+    (sum, block) =>
+      sum + (block.items || []).filter((item) => item.done).length,
+    0
+  );
 
   return (
     <motion.article
@@ -228,13 +272,124 @@ function SortableNoteCard({ note, onOpen, notesReorderMode }) {
 
       <div className="note-card-header">
         <span className="note-emoji">📝</span>
-        <small>{noteDate}</small>
+
+        <div className="note-card-right">
+          <small>{noteDate}</small>
+
+          {note.pinned && (
+            <span className="note-pin-indicator">
+              <Pin size={15} />
+            </span>
+          )}
+
+          <button
+            className="note-menu-btn"
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              setNoteMenuId(noteMenuId === note.id ? null : note.id);
+            }}
+          >
+            <MoreHorizontal size={18} />
+          </button>
+
+          {noteMenuId === note.id && (
+            <div className="note-card-menu" onClick={(e) => e.stopPropagation()}>
+          <button
+            onClick={() => {
+              setNoteMenuId(null);
+              openEditNote(note);
+            }}
+          >
+            <Pencil size={15} />
+            Editar nota
+          </button>
+
+            <button
+              onClick={() => {
+                setNoteMenuId(null);
+                toggleNotePinned(note);
+              }}
+            >
+              {note.pinned ? <PinOff size={15} /> : <Pin size={15} />}
+              {note.pinned ? "Desfijar" : "Fijar"}
+            </button>
+
+            <button
+              className="danger"
+              onClick={() => {
+                setNoteMenuId(null);
+                deleteNote(note.id);
+              }}
+            >
+              <Trash2 size={15} />
+              Eliminar
+            </button>
+            </div>
+          )}
+        </div>
       </div>
 
       <h3>{note.title}</h3>
-      <p>{note.content || "Sin contenido adicional."}</p>
 
-      <span className="note-read-more">Abrir nota</span>
+      {note.content && <p>{note.content}</p>}
+
+      {textBlocks.slice(0, 1).map((block) => (
+        <p key={block.id}>{block.text}</p>
+      ))}
+
+      {checklistBlocks.slice(0, 1).map((block) => (
+        <div className="note-preview-checklist" key={block.id}>
+          <strong>{block.title || "Checklist"}</strong>
+
+          {(block.items || []).slice(0, 3).map((item) => (
+
+          <div
+            className={`note-preview-check ${item.done ? "completed" : ""}`}
+            key={item.id}
+          >
+            <span className={`fake-check ${item.done ? "done" : ""}`}>
+              {item.done ? "✓" : ""}
+            </span>
+            <span>{item.text || "Elemento sin nombre"}</span>
+          </div>
+
+          ))}
+        </div>
+      ))}
+
+          {pendingBlocks.slice(0, 1).map((block) => (
+            <div
+              className={`note-preview-pending ${
+                Number(block.amount || 0) > 0 ? "pending-red" : "pending-green"
+              }`}
+              key={block.id}
+            >
+          <div>
+            <UserRound size={17} />
+            <span>{block.person || "Pendiente"}</span>
+          </div>
+
+          <strong>
+            ₡{Number(block.amount || 0).toLocaleString("es-CR")}
+          </strong>
+        </div>
+      ))}
+
+      <div className="note-card-footer">
+        {totalChecklistItems > 0 && (
+          <span>
+            {completedChecklistItems}/{totalChecklistItems} tareas
+          </span>
+        )}
+
+        {pendingBlocks.length > 0 && (
+          <span>
+            {pendingBlocks.length} pendiente
+            {pendingBlocks.length > 1 ? "s" : ""}
+          </span>
+        )}
+      </div>
     </motion.article>
   );
 }
@@ -279,6 +434,8 @@ function App() {
     title: "",
     content: "",
     color: "note-red",
+    pinned: false,
+    blocks: [],
   };
 
   const [user, setUser] = useState(null);
@@ -334,6 +491,8 @@ function App() {
   const [noteErrors, setNoteErrors] = useState({});
   const [notePage, setNotePage] = useState(1);
   const [notesReorderMode, setNotesReorderMode] = useState(false);
+  const [noteSearch, setNoteSearch] = useState("");
+  const [noteMenuId, setNoteMenuId] = useState(null);
 
   const [errors, setErrors] = useState({});
   const [alertData, setAlertData] = useState(null);
@@ -689,46 +848,87 @@ function App() {
     return groups;
   }, [expiredTasks]);
 
-  const visibleNotes = useMemo(() => {
-    return notes.slice(
-      (notePage - 1) * NOTES_PER_PAGE,
-      notePage * NOTES_PER_PAGE
-    );
-  }, [notes, notePage]);
+const filteredNotes = useMemo(() => {
+  const search = noteSearch.trim().toLowerCase();
 
-  const totalNotePages = Math.max(1, Math.ceil(notes.length / NOTES_PER_PAGE));
+  const base = [...notes].sort((a, b) => {
+    if ((a.pinned ?? false) !== (b.pinned ?? false)) {
+      return a.pinned ? -1 : 1;
+    }
 
-  const openCreateNote = () => {
-    setNoteMode("create");
-    setNoteForm(emptyNoteForm);
-    setSelectedNote(null);
-    setNoteErrors({});
-    setShowNoteModal(true);
-  };
+    return Number(a.position || 0) - Number(b.position || 0);
+  });
 
-  const openViewNote = (note) => {
-    setNoteMode("view");
-    setSelectedNote(note);
-    setNoteForm({
-      title: note.title || "",
-      content: note.content || "",
-      color: note.color || "note-red",
-    });
-    setNoteErrors({});
-    setShowNoteModal(true);
-  };
+  if (!search) return base;
 
-  const openEditNote = (note) => {
-    setNoteMode("edit");
-    setSelectedNote(note);
-    setNoteForm({
-      title: note.title || "",
-      content: note.content || "",
-      color: note.color || "note-red",
-    });
-    setNoteErrors({});
-    setShowNoteModal(true);
-  };
+  return base.filter((note) => {
+    const blocksText = (note.blocks || [])
+      .map((block) => {
+        if (block.type === "text") return block.text || "";
+        if (block.type === "checklist") {
+          return (block.items || []).map((item) => item.text).join(" ");
+        }
+        if (block.type === "pending") {
+          return `${block.person || ""} ${block.amount || ""}`;
+        }
+        return "";
+      })
+      .join(" ");
+
+    return `${note.title || ""} ${note.content || ""} ${blocksText}`
+      .toLowerCase()
+      .includes(search);
+  });
+}, [notes, noteSearch]);
+
+const visibleNotes = useMemo(() => {
+  return filteredNotes.slice(
+    (notePage - 1) * NOTES_PER_PAGE,
+    notePage * NOTES_PER_PAGE
+  );
+}, [filteredNotes, notePage]);
+
+const totalNotePages = Math.max(
+  1,
+  Math.ceil(filteredNotes.length / NOTES_PER_PAGE)
+);
+
+const openCreateNote = () => {
+  setNoteMode("create");
+  setNoteForm(emptyNoteForm);
+  setSelectedNote(null);
+  setNoteErrors({});
+  setShowNoteModal(true);
+};
+
+const openViewNote = (note) => {
+  setNoteMode("view");
+  setSelectedNote(note);
+  setNoteForm({
+    title: note.title || "",
+    content: note.content || "",
+    color: note.color || "note-red",
+    pinned: note.pinned || false,
+    blocks: note.blocks || [],
+  });
+  setNoteErrors({});
+  setShowNoteModal(true);
+};
+
+const openEditNote = (note) => {
+  setNoteMenuId(null);
+  setNoteMode("edit");
+  setSelectedNote(note);
+  setNoteForm({
+    title: note.title || "",
+    content: note.content || "",
+    color: note.color || "note-red",
+    pinned: note.pinned || false,
+    blocks: note.blocks || [],
+  });
+  setNoteErrors({});
+  setShowNoteModal(true);
+};
 
   const closeNoteModal = () => {
     setShowNoteModal(false);
@@ -738,39 +938,62 @@ function App() {
     setNoteMode("create");
   };
 
-  const saveNote = async () => {
-    const newErrors = {};
+const saveNote = async () => {
+  const newErrors = {};
 
-    if (!noteForm.title.trim()) {
-      newErrors.title = "Agrega un título.";
+  if (!noteForm.title.trim()) {
+    newErrors.title = "Agrega un título.";
+  }
+
+  setNoteErrors(newErrors);
+  if (Object.keys(newErrors).length > 0) return;
+
+  const cleanedBlocks = (noteForm.blocks || []).map((block) => {
+    if (block.type === "checklist") {
+      return {
+        ...block,
+        items: (block.items || []).filter((item) => item.text.trim()),
+      };
     }
 
-    setNoteErrors(newErrors);
-    if (Object.keys(newErrors).length > 0) return;
-
-    if (noteMode === "edit" && selectedNote) {
-      await updateDoc(doc(db, "users", user.uid, "notes", selectedNote.id), {
-        title: noteForm.title,
-        content: noteForm.content,
-        color: noteForm.color,
-        updatedAt: serverTimestamp(),
-      });
-    } else {
-      const noteRef = doc(collection(db, "users", user.uid, "notes"));
-
-      await setDoc(noteRef, {
-        id: noteRef.id,
-        title: noteForm.title,
-        content: noteForm.content,
-        color: noteForm.color,
-        position: notes.length,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+    if (block.type === "pending") {
+      return {
+        ...block,
+        person: block.person || "",
+        amount: block.amount || "",
+      };
     }
 
-    closeNoteModal();
-  };
+    return block;
+  });
+
+  if (noteMode === "edit" && selectedNote) {
+    await updateDoc(doc(db, "users", user.uid, "notes", selectedNote.id), {
+      title: noteForm.title,
+      content: noteForm.content,
+      color: noteForm.color,
+      pinned: noteForm.pinned || false,
+      blocks: cleanedBlocks,
+      updatedAt: serverTimestamp(),
+    });
+  } else {
+    const noteRef = doc(collection(db, "users", user.uid, "notes"));
+
+    await setDoc(noteRef, {
+      id: noteRef.id,
+      title: noteForm.title,
+      content: noteForm.content,
+      color: noteForm.color,
+      pinned: noteForm.pinned || false,
+      blocks: cleanedBlocks,
+      position: notes.length,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  }
+
+  closeNoteModal();
+};
 
   const deleteNote = (noteId) => {
     showAlert({
@@ -786,6 +1009,164 @@ function App() {
       },
     });
   };
+
+const toggleNotePinned = async (note) => {
+  const newPinnedValue = !(note.pinned || false);
+
+  const updatedNote = {
+    ...note,
+    pinned: newPinnedValue,
+  };
+
+  setSelectedNote((prev) =>
+    prev && prev.id === note.id ? updatedNote : prev
+  );
+
+  setNotes((prev) =>
+    prev.map((item) => (item.id === note.id ? updatedNote : item))
+  );
+
+  await updateDoc(doc(db, "users", user.uid, "notes", note.id), {
+    pinned: newPinnedValue,
+    updatedAt: serverTimestamp(),
+  });
+
+  setNoteMenuId(null);
+};
+
+const addNoteTextBlock = () => {
+  setNoteForm({
+    ...noteForm,
+    blocks: [
+      ...noteForm.blocks,
+      {
+        id: createNoteId(),
+        type: "text",
+        text: "",
+      },
+    ],
+  });
+};
+
+const addNoteChecklistBlock = () => {
+  setNoteForm({
+    ...noteForm,
+    blocks: [
+      ...noteForm.blocks,
+      {
+        id: createNoteId(),
+        type: "checklist",
+        title: `Checklist ${noteForm.blocks.filter((b) => b.type === "checklist").length + 1}`,
+        items: [
+          {
+            id: createNoteId(),
+            text: "",
+            done: false,
+          },
+        ],
+      },
+    ],
+  });
+};
+
+const addNotePendingBlock = () => {
+  setNoteForm({
+    ...noteForm,
+    blocks: [
+      ...noteForm.blocks,
+      {
+        id: createNoteId(),
+        type: "pending",
+        person: "",
+        amount: "",
+      },
+    ],
+  });
+};
+
+const updateNoteBlock = (blockId, field, value) => {
+  setNoteForm({
+    ...noteForm,
+    blocks: noteForm.blocks.map((block) =>
+      block.id === blockId ? { ...block, [field]: value } : block
+    ),
+  });
+};
+
+const removeNoteBlock = (blockId) => {
+  setNoteForm({
+    ...noteForm,
+    blocks: noteForm.blocks.filter((block) => block.id !== blockId),
+  });
+};
+
+const addChecklistItem = (blockId) => {
+  setNoteForm({
+    ...noteForm,
+    blocks: noteForm.blocks.map((block) =>
+      block.id === blockId
+        ? {
+            ...block,
+            items: [
+              ...(block.items || []),
+              {
+                id: createNoteId(),
+                text: "",
+                done: false,
+              },
+            ],
+          }
+        : block
+    ),
+  });
+};
+
+const updateChecklistItem = (blockId, itemId, field, value) => {
+  setNoteForm({
+    ...noteForm,
+    blocks: noteForm.blocks.map((block) =>
+      block.id === blockId
+        ? {
+            ...block,
+            items: block.items.map((item) =>
+              item.id === itemId ? { ...item, [field]: value } : item
+            ),
+          }
+        : block
+    ),
+  });
+};
+
+const toggleChecklistItemInNote = async (note, blockId, itemId) => {
+  const updatedBlocks = (note.blocks || []).map((block) =>
+    block.id === blockId
+      ? {
+          ...block,
+          items: (block.items || []).map((item) =>
+            item.id === itemId ? { ...item, done: !item.done } : item
+          ),
+        }
+      : block
+  );
+
+  const updatedNote = {
+    ...note,
+    blocks: updatedBlocks,
+  };
+
+  setSelectedNote((prev) =>
+    prev && prev.id === note.id ? updatedNote : prev
+  );
+
+  setNotes((prev) =>
+    prev.map((item) => (item.id === note.id ? updatedNote : item))
+  );
+
+  await updateDoc(doc(db, "users", user.uid, "notes", note.id), {
+    blocks: updatedBlocks,
+    updatedAt: serverTimestamp(),
+  });
+};
 
   const handleNoteDragEnd = async (event) => {
     const { active, over } = event;
@@ -1803,11 +2184,23 @@ function App() {
 
                 {selectedTool === "notes" && (
                   <section className="notes-page">
-                    <div className="notes-header">
-                      <div>
-                        <h2>Bloc de notas</h2>
-                        <p>Notas rápidas, simples y guardadas por usuario.</p>
-                      </div>
+                  <div className="notes-header">
+                    <div>
+                      <h2>Bloc de notas</h2>
+                      <p>Notas rápidas, simples y guardadas por usuario.</p>
+                    </div>
+
+                    <div className="notes-search-box">
+                      <Search size={18} />
+                      <input
+                        placeholder="Buscar notas..."
+                        value={noteSearch}
+                        onChange={(e) => {
+                          setNoteSearch(e.target.value);
+                          setNotePage(1);
+                        }}
+                      />
+                    </div>
 
                     <div className="notes-actions">
 
@@ -1856,12 +2249,18 @@ function App() {
                           >
                             <div className="notes-grid">
                               {visibleNotes.map((note) => (
-                            <SortableNoteCard
-                              key={note.id}
-                              note={note}
-                              onOpen={openViewNote}
-                              notesReorderMode={notesReorderMode}
-                            />
+                              <SortableNoteCard
+                                key={note.id}
+                                note={note}
+                                onOpen={openViewNote}
+                                notesReorderMode={notesReorderMode}
+                                noteMenuId={noteMenuId}
+                                setNoteMenuId={setNoteMenuId}
+                                toggleNotePinned={toggleNotePinned}
+                                deleteNote={deleteNote}
+                                openEditNote={openEditNote}
+                                toggleChecklistItemInNote={toggleChecklistItemInNote}
+                              />
                               ))}
                             </div>
                           </SortableContext>
@@ -2486,97 +2885,301 @@ function App() {
           </motion.div>
         )}
 
-        {showNoteModal && (
-          <motion.div className="overlay" onClick={closeNoteModal}>
-            <motion.div
-              className={`note-modal ${noteForm.color}`}
-              initial={{ y: 80, opacity: 0, scale: 0.96 }}
-              animate={{ y: 0, opacity: 1, scale: 1 }}
-              exit={{ y: 80, opacity: 0, scale: 0.96 }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <button className="back-btn" onClick={closeNoteModal}>
-                <X />
-              </button>
+{showNoteModal && (
+  <motion.div className="overlay" onClick={closeNoteModal}>
+    <motion.div
+      className={`note-modal ${noteForm.color}`}
+      initial={{ y: 80, opacity: 0, scale: 0.96 }}
+      animate={{ y: 0, opacity: 1, scale: 1 }}
+      exit={{ y: 80, opacity: 0, scale: 0.96 }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      <button className="back-btn" onClick={closeNoteModal}>
+        <X />
+      </button>
 
-              {noteMode === "view" ? (
-                <>
-                  <div className="note-modal-header">
-                    <span className="note-emoji">📝</span>
-                    <small>{formatNoteDate(selectedNote)}</small>
-                  </div>
+      {noteMode === "view" ? (
+        <>
+          <div className="note-modal-header">
+            <span className="note-emoji">📝</span>
 
-                  <h2>{selectedNote?.title}</h2>
+            <div className="note-view-actions">
+              <small>{formatNoteDate(selectedNote)}</small>
 
-                  <p className="note-full-content">
-                    {selectedNote?.content || "Sin contenido adicional."}
-                  </p>
-
-                  <div className="detail-actions">
-                    <button
-                      className="edit-btn"
-                      onClick={() => openEditNote(selectedNote)}
-                    >
-                      <Pencil size={18} />
-                      Editar
-                    </button>
-
-                    <button
-                      className="delete-btn"
-                      onClick={() => deleteNote(selectedNote.id)}
-                    >
-                      <Trash2 size={18} />
-                      Eliminar
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  <h2>{noteMode === "edit" ? "Editar nota" : "Nueva nota"}</h2>
-
-                  <input
-                    placeholder="Título de la nota"
-                    value={noteForm.title}
-                    onChange={(e) =>
-                      setNoteForm({ ...noteForm, title: e.target.value })
-                    }
-                  />
-
-                  {noteErrors.title && (
-                    <span className="field-error">{noteErrors.title}</span>
-                  )}
-
-                  <textarea
-                    className="note-editor-textarea"
-                    placeholder="Escribe tu nota..."
-                    value={noteForm.content}
-                    onChange={(e) =>
-                      setNoteForm({ ...noteForm, content: e.target.value })
-                    }
-                  />
-
-                  <div className="note-color-picker">
-                    {NOTE_COLORS.map((color) => (
-                      <button
-                        key={color}
-                        className={`note-color-dot ${color} ${
-                          noteForm.color === color ? "active" : ""
-                        }`}
-                        onClick={() => setNoteForm({ ...noteForm, color })}
-                        type="button"
-                      />
-                    ))}
-                  </div>
-
-                  <button className="save-btn" onClick={saveNote}>
-                    <Save size={18} />
-                    {noteMode === "edit" ? "Guardar cambios" : "Guardar nota"}
-                  </button>
-                </>
+              {selectedNote?.pinned && (
+                <span className="note-pin-indicator">
+                  <Pin size={15} />
+                </span>
               )}
-            </motion.div>
-          </motion.div>
-        )}
+            </div>
+          </div>
+
+          <h2>{selectedNote?.title}</h2>
+
+          {selectedNote?.content && (
+            <p className="note-full-content">{selectedNote.content}</p>
+          )}
+
+          {(selectedNote?.blocks || []).map((block) => (
+            <div className="note-view-block" key={block.id}>
+              {block.type === "text" && (
+                <p className="note-full-content">{block.text}</p>
+              )}
+
+              {block.type === "checklist" && (
+                <div className="note-view-checklist">
+                  <h3>{block.title || "Checklist"}</h3>
+
+                  {(block.items || []).map((item) => (
+                    <label
+                      className={`note-view-check ${
+                        item.done ? "completed" : ""
+                      }`}
+                      key={item.id}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={item.done}
+                        onChange={() =>
+                          toggleChecklistItemInNote(
+                            selectedNote,
+                            block.id,
+                            item.id
+                          )
+                        }
+                      />
+                      <span>{item.text || "Elemento sin nombre"}</span>
+                    </label>
+                  ))}
+                </div>
+              )}
+
+              {block.type === "pending" && (
+                <div
+                  className={`note-view-pending ${
+                    Number(block.amount || 0) > 0 ? "pending-red" : "pending-green"
+                  }`}
+                >
+                  <div>
+                    <UserRound size={18} />
+                    <span>{block.person || "Persona pendiente"}</span>
+                  </div>
+
+                  <strong>
+                    ₡{Number(block.amount || 0).toLocaleString("es-CR")}
+                  </strong>
+                </div>
+              )}
+            </div>
+          ))}
+
+          <div className="detail-actions">
+            <button
+              className="edit-btn"
+              onClick={() => openEditNote(selectedNote)}
+            >
+              <Pencil size={18} />
+              Editar
+            </button>
+
+            <button
+              className={`edit-btn ${selectedNote?.pinned ? "pinned-active-btn" : ""}`}
+              onClick={() => toggleNotePinned(selectedNote)}
+            >
+              {selectedNote?.pinned ? <PinOff size={18} /> : <Pin size={18} />}
+              {selectedNote?.pinned ? "Desfijar" : "Fijar"}
+            </button>
+
+            <button
+              className="delete-btn"
+              onClick={() => deleteNote(selectedNote.id)}
+            >
+              <Trash2 size={18} />
+              Eliminar
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <h2>{noteMode === "edit" ? "Editar nota" : "Nueva nota"}</h2>
+
+          <input
+            placeholder="Título de la nota"
+            value={noteForm.title}
+            onChange={(e) =>
+              setNoteForm({ ...noteForm, title: e.target.value })
+            }
+          />
+
+          {noteErrors.title && (
+            <span className="field-error">{noteErrors.title}</span>
+          )}
+
+          <textarea
+            className="note-editor-textarea"
+            placeholder="Escribe tu nota..."
+            value={noteForm.content}
+            onChange={(e) =>
+              setNoteForm({ ...noteForm, content: e.target.value })
+            }
+          />
+
+          <div className="note-builder-actions">
+            <button type="button" onClick={addNoteTextBlock}>
+              <Type size={17} />
+              Texto
+            </button>
+
+            <button type="button" onClick={addNoteChecklistBlock}>
+              <CheckSquare size={17} />
+              Checklist
+            </button>
+
+            <button type="button" onClick={addNotePendingBlock}>
+              <UserRound size={17} />
+              Pendiente
+            </button>
+          </div>
+
+          <div className="note-blocks-editor">
+            {(noteForm.blocks || []).map((block) => (
+              <div className="note-edit-block" key={block.id}>
+                <button
+                  className="note-remove-block"
+                  type="button"
+                  onClick={() => removeNoteBlock(block.id)}
+                >
+                  <X size={16} />
+                </button>
+
+                {block.type === "text" && (
+                  <>
+                    <label>Texto adicional</label>
+                    <textarea
+                      placeholder="Escribe otro bloque de texto..."
+                      value={block.text}
+                      onChange={(e) =>
+                        updateNoteBlock(block.id, "text", e.target.value)
+                      }
+                    />
+                  </>
+                )}
+
+                {block.type === "checklist" && (
+                  <>
+                    <label>Checklist</label>
+
+                    <input
+                      placeholder="Título del checklist"
+                      value={block.title}
+                      onChange={(e) =>
+                        updateNoteBlock(block.id, "title", e.target.value)
+                      }
+                    />
+
+                    {(block.items || []).map((item) => (
+                  <div className="note-check-edit-row" key={item.id}>
+                    <input
+                      className="note-big-checkbox"
+                      type="checkbox"
+                      checked={item.done}
+                      onChange={(e) =>
+                        updateChecklistItem(
+                          block.id,
+                          item.id,
+                          "done",
+                          e.target.checked
+                        )
+                      }
+                    />
+
+                    <input
+                      className={item.done ? "check-input-done" : ""}
+                      placeholder="Elemento del checklist"
+                      value={item.text}
+                      onChange={(e) =>
+                        updateChecklistItem(
+                          block.id,
+                          item.id,
+                          "text",
+                          e.target.value
+                        )
+                      }
+                    />
+                  </div>
+                    ))}
+
+                    <button
+                      type="button"
+                      className="note-small-action"
+                      onClick={() => addChecklistItem(block.id)}
+                    >
+                      <PlusCircle size={16} />
+                      Agregar punto
+                    </button>
+                  </>
+                )}
+
+                {block.type === "pending" && (
+                  <>
+                    <label>Pendiente</label>
+
+                    <div className="note-pending-edit-row">
+                      <input
+                        placeholder="Persona"
+                        value={block.person}
+                        onChange={(e) =>
+                          updateNoteBlock(block.id, "person", e.target.value)
+                        }
+                      />
+
+                      <input
+                        placeholder="Cantidad"
+                        value={block.amount}
+                        onChange={(e) =>
+                          updateNoteBlock(block.id, "amount", e.target.value)
+                        }
+                      />
+                    </div>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+
+          <button
+            type="button"
+            className={`note-pin-toggle ${noteForm.pinned ? "active" : ""}`}
+            onClick={() =>
+              setNoteForm({ ...noteForm, pinned: !noteForm.pinned })
+            }
+          >
+            {noteForm.pinned ? <PinOff size={18} /> : <Pin size={18} />}
+            {noteForm.pinned ? "Nota fijada arriba" : "Fijar nota arriba"}
+          </button>
+
+          <div className="note-color-picker">
+            {NOTE_COLORS.map((color) => (
+              <button
+                key={color}
+                className={`note-color-dot ${color} ${
+                  noteForm.color === color ? "active" : ""
+                }`}
+                onClick={() => setNoteForm({ ...noteForm, color })}
+                type="button"
+              />
+            ))}
+          </div>
+
+          <button className="save-btn" onClick={saveNote}>
+            <Save size={18} />
+            {noteMode === "edit" ? "Guardar cambios" : "Guardar nota"}
+          </button>
+        </>
+      )}
+    </motion.div>
+  </motion.div>
+)}
 
         {showModal && (
           <motion.div className="overlay" onClick={closeForm}>
