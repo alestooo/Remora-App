@@ -1,5 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  useSortable,
+  arrayMove,
+  rectSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
 import {
   collection,
@@ -11,6 +26,7 @@ import {
   query,
   orderBy,
   serverTimestamp,
+  writeBatch,
 } from "firebase/firestore";
 import { auth, provider, db } from "./firebase";
 import { requestNotificationPermission } from "./notifications";
@@ -41,6 +57,8 @@ import {
   CircleDollarSign,
   BadgeCheck,
   BadgeX,
+  GripVertical,
+  FilePlus2,
 } from "lucide-react";
 
 import icono from "./assets/icono.png";
@@ -85,6 +103,17 @@ const UNIVERSITY_COURSES = [
 ];
 
 const ITEMS_PER_PAGE = 10;
+const NOTES_PER_PAGE = 10;
+
+const NOTE_COLORS = [
+  "note-red",
+  "note-blue",
+  "note-yellow",
+  "note-green",
+  "note-purple",
+  "note-gray",
+];
+
 const MASTER_PASSWORD = "Alekey149";
 const UNLOCK_TIME = 5 * 60 * 1000;
 const HOURLY_RATE = 1500;
@@ -145,6 +174,57 @@ const calculateClientTotal = (products = []) => {
   }, 0);
 };
 
+function SortableNoteCard({ note, onOpen, formatNoteDate }) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: note.id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    zIndex: isDragging ? 20 : "auto",
+  };
+
+  return (
+    <motion.article
+      ref={setNodeRef}
+      style={style}
+      layout
+      whileHover={{ scale: 1.015 }}
+      whileTap={{ scale: 0.98 }}
+      className={`note-card ${note.color || "note-red"} ${
+        isDragging ? "dragging" : ""
+      }`}
+      onClick={() => onOpen(note)}
+    >
+      <button
+        className="note-drag-handle"
+        {...attributes}
+        {...listeners}
+        onClick={(event) => event.stopPropagation()}
+        aria-label="Mover nota"
+      >
+        <GripVertical size={18} />
+      </button>
+
+      <div className="note-card-header">
+        <span className="note-emoji">📝</span>
+        <small>{formatNoteDate(note)}</small>
+      </div>
+
+      <h3>{note.title}</h3>
+      <p>{note.content || "Sin contenido adicional."}</p>
+
+      <span className="note-read-more">Abrir nota</span>
+    </motion.article>
+  );
+}
+
 function App() {
   const emptyForm = {
     title: "",
@@ -179,6 +259,12 @@ function App() {
     name: "",
     products: [{ name: "", price: "" }],
     paid: false,
+  };
+
+  const emptyNoteForm = {
+    title: "",
+    content: "",
+    color: "note-red",
   };
 
   const [user, setUser] = useState(null);
@@ -226,23 +312,45 @@ function App() {
   const [clientForm, setClientForm] = useState(emptyClientForm);
   const [clientErrors, setClientErrors] = useState({});
 
+  const [notes, setNotes] = useState([]);
+  const [noteForm, setNoteForm] = useState(emptyNoteForm);
+  const [selectedNote, setSelectedNote] = useState(null);
+  const [showNoteModal, setShowNoteModal] = useState(false);
+  const [noteMode, setNoteMode] = useState("create");
+  const [noteErrors, setNoteErrors] = useState({});
+  const [notePage, setNotePage] = useState(1);
+
   const [errors, setErrors] = useState({});
   const [alertData, setAlertData] = useState(null);
   const [passwordInput, setPasswordInput] = useState("");
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: {
+        delay: 180,
+        tolerance: 6,
+      },
+    })
+  );
+
   const [isMobileCover, setIsMobileCover] = useState(window.innerWidth <= 768);
 
-useEffect(() => {
-  const handleResize = () => {
-    setIsMobileCover(window.innerWidth <= 768);
-  };
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobileCover(window.innerWidth <= 768);
+    };
 
-  window.addEventListener("resize", handleResize);
+    window.addEventListener("resize", handleResize);
 
-  return () => window.removeEventListener("resize", handleResize);
-}, []);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
-const DEFAULT_COVERS = isMobileCover ? MOBILE_COVERS : DESKTOP_COVERS;
+  const DEFAULT_COVERS = isMobileCover ? MOBILE_COVERS : DESKTOP_COVERS;
 
   const showAlert = (data) => setAlertData(data);
   const closeAlert = () => setAlertData(null);
@@ -328,7 +436,7 @@ const DEFAULT_COVERS = isMobileCover ? MOBILE_COVERS : DESKTOP_COVERS;
     return () => clearInterval(interval);
   }, [accountsUnlocked, accountsUnlockEnd, user]);
 
-    useEffect(() => {
+  useEffect(() => {
     if (!user) {
       setTasks([]);
       setSelectedTask(null);
@@ -435,7 +543,25 @@ const DEFAULT_COVERS = isMobileCover ? MOBILE_COVERS : DESKTOP_COVERS;
     return () => unsubscribe();
   }, [user]);
 
-  const handleLogin = async () => {
+  useEffect(() => {
+    if (!user) return;
+
+    const notesRef = collection(db, "users", user.uid, "notes");
+    const q = query(notesRef, orderBy("position", "asc"));
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const userNotes = snapshot.docs.map((document) => ({
+        id: document.id,
+        ...document.data(),
+      }));
+
+      setNotes(userNotes);
+    });
+
+    return () => unsubscribe();
+  }, [user]);
+
+    const handleLogin = async () => {
     try {
       await signInWithPopup(auth, provider);
     } catch (error) {
@@ -458,29 +584,29 @@ const DEFAULT_COVERS = isMobileCover ? MOBILE_COVERS : DESKTOP_COVERS;
     setVisibleAccountId(null);
   };
 
-const enableNotifications = async () => {
-  try {
-    await requestNotificationPermission(user);
+  const enableNotifications = async () => {
+    try {
+      await requestNotificationPermission(user);
 
-    showAlert({
-      type: "success",
-      title: "Notificaciones activadas",
-      message: "Remora ya puede enviarte recordatorios en este dispositivo.",
-      confirmText: "Listo",
-      onlyConfirm: true,
-      onConfirm: closeAlert,
-    });
-  } catch (error) {
-    showAlert({
-      type: "warning",
-      title: "No se pudieron activar",
-      message: error.message,
-      confirmText: "Entendido",
-      onlyConfirm: true,
-      onConfirm: closeAlert,
-    });
-  }
-};
+      showAlert({
+        type: "success",
+        title: "Notificaciones activadas",
+        message: "Remora ya puede enviarte recordatorios en este dispositivo.",
+        confirmText: "Listo",
+        onlyConfirm: true,
+        onConfirm: closeAlert,
+      });
+    } catch (error) {
+      showAlert({
+        type: "warning",
+        title: "No se pudieron activar",
+        message: error.message,
+        confirmText: "Entendido",
+        onlyConfirm: true,
+        onConfirm: closeAlert,
+      });
+    }
+  };
 
   const getCover = (task) => DEFAULT_COVERS[task.type];
 
@@ -547,6 +673,142 @@ const enableNotifications = async () => {
 
     return groups;
   }, [expiredTasks]);
+
+  const visibleNotes = useMemo(() => {
+    return notes.slice(
+      (notePage - 1) * NOTES_PER_PAGE,
+      notePage * NOTES_PER_PAGE
+    );
+  }, [notes, notePage]);
+
+  const totalNotePages = Math.max(1, Math.ceil(notes.length / NOTES_PER_PAGE));
+
+  const openCreateNote = () => {
+    setNoteMode("create");
+    setNoteForm(emptyNoteForm);
+    setSelectedNote(null);
+    setNoteErrors({});
+    setShowNoteModal(true);
+  };
+
+  const openViewNote = (note) => {
+    setNoteMode("view");
+    setSelectedNote(note);
+    setNoteForm({
+      title: note.title || "",
+      content: note.content || "",
+      color: note.color || "note-red",
+    });
+    setNoteErrors({});
+    setShowNoteModal(true);
+  };
+
+  const openEditNote = (note) => {
+    setNoteMode("edit");
+    setSelectedNote(note);
+    setNoteForm({
+      title: note.title || "",
+      content: note.content || "",
+      color: note.color || "note-red",
+    });
+    setNoteErrors({});
+    setShowNoteModal(true);
+  };
+
+  const closeNoteModal = () => {
+    setShowNoteModal(false);
+    setSelectedNote(null);
+    setNoteForm(emptyNoteForm);
+    setNoteErrors({});
+    setNoteMode("create");
+  };
+
+  const saveNote = async () => {
+    const newErrors = {};
+
+    if (!noteForm.title.trim()) {
+      newErrors.title = "Agrega un título.";
+    }
+
+    setNoteErrors(newErrors);
+    if (Object.keys(newErrors).length > 0) return;
+
+    if (noteMode === "edit" && selectedNote) {
+      await updateDoc(doc(db, "users", user.uid, "notes", selectedNote.id), {
+        title: noteForm.title,
+        content: noteForm.content,
+        color: noteForm.color,
+        updatedAt: serverTimestamp(),
+      });
+    } else {
+      const noteRef = doc(collection(db, "users", user.uid, "notes"));
+
+      await setDoc(noteRef, {
+        id: noteRef.id,
+        title: noteForm.title,
+        content: noteForm.content,
+        color: noteForm.color,
+        position: notes.length,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
+
+    closeNoteModal();
+  };
+
+  const deleteNote = (noteId) => {
+    showAlert({
+      type: "danger",
+      title: "Eliminar nota",
+      message: "¿Seguro que quieres eliminar esta nota?",
+      confirmText: "Sí, eliminar",
+      cancelText: "Cancelar",
+      onConfirm: async () => {
+        await deleteDoc(doc(db, "users", user.uid, "notes", noteId));
+        closeAlert();
+        closeNoteModal();
+      },
+    });
+  };
+
+  const handleNoteDragEnd = async (event) => {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = notes.findIndex((note) => note.id === active.id);
+    const newIndex = notes.findIndex((note) => note.id === over.id);
+
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const reorderedNotes = arrayMove(notes, oldIndex, newIndex);
+
+    setNotes(reorderedNotes);
+
+    const batch = writeBatch(db);
+
+    reorderedNotes.forEach((note, index) => {
+      const noteRef = doc(db, "users", user.uid, "notes", note.id);
+
+      batch.update(noteRef, {
+        position: index,
+        updatedAt: serverTimestamp(),
+      });
+    });
+
+    await batch.commit();
+  };
+
+  const formatNoteDate = (note) => {
+    if (!note?.createdAt?.toDate) return "Hoy";
+
+    return note.createdAt.toDate().toLocaleDateString("es-CR", {
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
+  };
 
   const formChanged = () => {
     if (!originalForm) return false;
@@ -729,8 +991,8 @@ const enableNotifications = async () => {
     }
   };
 
-  const openEdit = (task) => {
-      const editForm = {
+    const openEdit = (task) => {
+    const editForm = {
       title: task.title,
       type: task.type,
       course: task.course || "Pensamiento Crítico",
@@ -745,7 +1007,7 @@ const enableNotifications = async () => {
         ? task.resources
         : [{ name: "", url: "", type: "PDF" }],
       driveFolderUrl: task.driveFolderUrl || "",
-      checklist: task.checklist.map((item) => item.text).join("\n"),
+      checklist: task.checklist?.map((item) => item.text).join("\n") || "",
       workSegments: task.workSegments?.length
         ? task.workSegments
         : [{ start: "", end: "" }],
@@ -760,7 +1022,7 @@ const enableNotifications = async () => {
     setErrors({});
   };
 
-    const deleteTask = (id) => {
+  const deleteTask = (id) => {
     showAlert({
       type: "danger",
       title: "Eliminar actividad",
@@ -928,44 +1190,44 @@ const enableNotifications = async () => {
     });
   };
 
-const saveClient = async () => {
-  const newErrors = {};
+  const saveClient = async () => {
+    const newErrors = {};
 
-  if (!clientForm.name.trim()) {
-    newErrors.name = "Agrega el nombre de la persona.";
-  }
+    if (!clientForm.name.trim()) {
+      newErrors.name = "Agrega el nombre de la persona.";
+    }
 
-  setClientErrors(newErrors);
-  if (Object.keys(newErrors).length > 0) return;
+    setClientErrors(newErrors);
+    if (Object.keys(newErrors).length > 0) return;
 
-  const cleanedProducts = clientForm.products.filter(
-    (product) => product.name.trim() || product.price.trim()
-  );
+    const cleanedProducts = clientForm.products.filter(
+      (product) => product.name.trim() || product.price.trim()
+    );
 
-  if (editingClient) {
-    await updateDoc(doc(db, "users", user.uid, "clients", editingClient), {
-      ...clientForm,
-      products: cleanedProducts,
-      total: calculateClientTotal(cleanedProducts),
-      updatedAt: serverTimestamp(),
-    });
-  } else {
-    const clientRef = doc(collection(db, "users", user.uid, "clients"));
+    if (editingClient) {
+      await updateDoc(doc(db, "users", user.uid, "clients", editingClient), {
+        ...clientForm,
+        products: cleanedProducts,
+        total: calculateClientTotal(cleanedProducts),
+        updatedAt: serverTimestamp(),
+      });
+    } else {
+      const clientRef = doc(collection(db, "users", user.uid, "clients"));
 
-    await setDoc(clientRef, {
-      ...clientForm,
-      products: cleanedProducts,
-      total: calculateClientTotal(cleanedProducts),
-      id: clientRef.id,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-  }
+      await setDoc(clientRef, {
+        ...clientForm,
+        products: cleanedProducts,
+        total: calculateClientTotal(cleanedProducts),
+        id: clientRef.id,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    }
 
-  setEditingClient(null);
-  setClientForm(emptyClientForm);
-  setShowClientModal(false);
-};
+    setEditingClient(null);
+    setClientForm(emptyClientForm);
+    setShowClientModal(false);
+  };
 
   const toggleClientPaid = async (client) => {
     await updateDoc(doc(db, "users", user.uid, "clients", client.id), {
@@ -974,19 +1236,19 @@ const saveClient = async () => {
     });
   };
 
-const deleteClient = async (id) => {
-  showAlert({
-    type: "danger",
-    title: "Eliminar cliente",
-    message: "¿Seguro que quieres eliminar este cliente?",
-    confirmText: "Sí, eliminar",
-    cancelText: "Cancelar",
-    onConfirm: async () => {
-      await deleteDoc(doc(db, "users", user.uid, "clients", id));
-      closeAlert();
-    },
-  });
-};
+  const deleteClient = async (id) => {
+    showAlert({
+      type: "danger",
+      title: "Eliminar cliente",
+      message: "¿Seguro que quieres eliminar este cliente?",
+      confirmText: "Sí, eliminar",
+      cancelText: "Cancelar",
+      onConfirm: async () => {
+        await deleteDoc(doc(db, "users", user.uid, "clients", id));
+        closeAlert();
+      },
+    });
+  };
 
   const unlockAccountsSession = () => {
     const endTime = Date.now() + UNLOCK_TIME;
@@ -1069,7 +1331,7 @@ const deleteClient = async (id) => {
     }
   };
 
-  const saveAccount = async () => {
+    const saveAccount = async () => {
     const newErrors = {};
 
     if (!accountForm.title.trim()) {
@@ -1177,17 +1439,18 @@ const deleteClient = async (id) => {
 
   const maxWeekly = Math.max(...weeklyStats.map((item) => item.count), 1);
 
-    const totalAlekeyHours = tasks.reduce((sum, task) => {
-      if (task.type !== "Alekey") return sum;
-      if (task.alekeyRole !== "Trabajador") return sum;
-      if (task.hoursActive === false) return sum;
+  const totalAlekeyHours = tasks.reduce((sum, task) => {
+    if (task.type !== "Alekey") return sum;
+    if (task.alekeyRole !== "Trabajador") return sum;
+    if (task.hoursActive === false) return sum;
 
-      return sum + Number(task.totalHours || 0);
-    }, 0);
+    return sum + Number(task.totalHours || 0);
+  }, 0);
 
   const pendingClients = clients.filter((client) => !client.paid);
   const pendingClientsTotal = pendingClients.reduce(
-    (sum, client) => sum + Number(client.total || calculateClientTotal(client.products)),
+    (sum, client) =>
+      sum + Number(client.total || calculateClientTotal(client.products)),
     0
   );
 
@@ -1258,7 +1521,7 @@ const deleteClient = async (id) => {
     </motion.div>
   );
 
-    return (
+  return (
     <div className="app">
       <header className="header">
         <div className="header-top">
@@ -1422,7 +1685,7 @@ const deleteClient = async (id) => {
                   {
                     id: "notes",
                     title: "Bloc de notas",
-                    text: "Notas rápidas guardadas.",
+                    text: "Notas cortas y organizadas.",
                     icon: <StickyNote />,
                   },
                   {
@@ -1500,7 +1763,7 @@ const deleteClient = async (id) => {
                   </div>
                 )}
 
-                {selectedTool === "grades" && (
+                                {selectedTool === "grades" && (
                   <div className="tool-card">
                     <BookOpen size={38} />
                     <h2>Conversor de notas</h2>
@@ -1524,26 +1787,85 @@ const deleteClient = async (id) => {
                 )}
 
                 {selectedTool === "notes" && (
-                  <div className="tool-card">
-                    <NotebookText size={38} />
-                    <h2>Bloc de notas rápidas</h2>
+                  <section className="notes-page">
+                    <div className="notes-header">
+                      <div>
+                        <h2>Bloc de notas</h2>
+                        <p>Notas rápidas, simples y guardadas por usuario.</p>
+                      </div>
 
-                    <textarea
-                      value={toolsData.quickNote || ""}
-                      onChange={(e) =>
-                        setToolsData({
-                          ...toolsData,
-                          quickNote: e.target.value,
-                        })
-                      }
-                      placeholder="Escribe ideas, pendientes rápidos o recordatorios..."
-                    />
+                      <button className="save-btn" onClick={openCreateNote}>
+                        <FilePlus2 size={18} />
+                        Nueva nota
+                      </button>
+                    </div>
 
-                    <button className="save-btn" onClick={saveQuickNote}>
-                      <Save size={18} />
-                      Guardar nota
-                    </button>
-                  </div>
+                    {notes.length === 0 ? (
+                      <div className="notes-empty">
+                        <StickyNote size={48} />
+                        <h3>No tienes notas todavía</h3>
+                        <p>Presiona “Nueva nota” para escribir la primera.</p>
+                      </div>
+                    ) : (
+                      <>
+                        <DndContext
+                          sensors={sensors}
+                          collisionDetection={closestCenter}
+                          onDragEnd={handleNoteDragEnd}
+                        >
+                          <SortableContext
+                            items={visibleNotes.map((note) => note.id)}
+                            strategy={rectSortingStrategy}
+                          >
+                            <div className="notes-grid">
+                              {visibleNotes.map((note) => (
+                                <SortableNoteCard
+                                  key={note.id}
+                                  note={note}
+                                  onOpen={openViewNote}
+                                  formatNoteDate={formatNoteDate}
+                                />
+                              ))}
+                            </div>
+                          </SortableContext>
+                        </DndContext>
+
+                        {totalNotePages > 1 && (
+                          <div className="pagination">
+                            <button
+                              disabled={notePage === 1}
+                              onClick={() => {
+                                setNotePage(notePage - 1);
+                                window.scrollTo({
+                                  top: 0,
+                                  behavior: "smooth",
+                                });
+                              }}
+                            >
+                              Anterior
+                            </button>
+
+                            <span>
+                              Página {notePage} de {totalNotePages}
+                            </span>
+
+                            <button
+                              disabled={notePage === totalNotePages}
+                              onClick={() => {
+                                setNotePage(notePage + 1);
+                                window.scrollTo({
+                                  top: 0,
+                                  behavior: "smooth",
+                                });
+                              }}
+                            >
+                              Siguiente
+                            </button>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </section>
                 )}
 
                 {selectedTool === "clients" && (
@@ -1558,75 +1880,82 @@ const deleteClient = async (id) => {
                       + Agregar persona
                     </button>
 
-                  <div className="clients-list">
-                  {clients.length === 0 ? (
-                    <p className="empty-private">No tienes clientes agregados.</p>
-                  ) : (
-                    clients.map((client) => (
-                      <div className="client-card" key={client.id}>
-                        <div className="client-main">
-                          <button
-                            className={`client-check ${client.paid ? "paid" : ""}`}
-                            onClick={() => toggleClientPaid(client)}
-                          >
-                            {client.paid ? <BadgeCheck /> : <BadgeX />}
-                          </button>
+                    <div className="clients-list">
+                      {clients.length === 0 ? (
+                        <p className="empty-private">
+                          No tienes clientes agregados.
+                        </p>
+                      ) : (
+                        clients.map((client) => (
+                          <div className="client-card" key={client.id}>
+                            <div className="client-main">
+                              <button
+                                className={`client-check ${
+                                  client.paid ? "paid" : ""
+                                }`}
+                                onClick={() => toggleClientPaid(client)}
+                              >
+                                {client.paid ? <BadgeCheck /> : <BadgeX />}
+                              </button>
 
-                          <div>
-                            <h3>{client.name}</h3>
-                            <p>
-                              Total: ₡
-                              {Number(
-                                client.total || calculateClientTotal(client.products)
-                              ).toLocaleString("es-CR")}
-                            </p>
+                              <div>
+                                <h3>{client.name}</h3>
+                                <p>
+                                  Total: ₡
+                                  {Number(
+                                    client.total ||
+                                      calculateClientTotal(client.products)
+                                  ).toLocaleString("es-CR")}
+                                </p>
+                              </div>
+                            </div>
+
+                            {client.products?.length > 0 && (
+                              <div className="client-products">
+                                {client.products.map((product, index) => (
+                                  <span key={index}>
+                                    {product.name || "Producto"}{" "}
+                                    {product.price
+                                      ? `₡${Number(
+                                          product.price
+                                        ).toLocaleString("es-CR")}`
+                                      : ""}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+
+                            <div className="client-actions">
+                              <button
+                                className="edit-mini-btn"
+                                onClick={() => {
+                                  setEditingClient(client.id);
+                                  setClientForm({
+                                    name: client.name || "",
+                                    products:
+                                      client.products?.length > 0
+                                        ? client.products
+                                        : [{ name: "", price: "" }],
+                                    paid: client.paid || false,
+                                  });
+                                  setClientErrors({});
+                                  setShowClientModal(true);
+                                }}
+                              >
+                                Editar
+                              </button>
+
+                              <button
+                                className="delete-mini-btn"
+                                onClick={() => deleteClient(client.id)}
+                              >
+                                Eliminar
+                              </button>
+                            </div>
                           </div>
-                        </div>
-
-                        {client.products?.length > 0 && (
-                          <div className="client-products">
-                            {client.products.map((product, index) => (
-                              <span key={index}>
-                                {product.name || "Producto"}{" "}
-                                {product.price
-                                  ? `₡${Number(product.price).toLocaleString("es-CR")}`
-                                  : ""}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-
-                        <div className="client-actions">
-                          <button
-                            className="edit-mini-btn"
-                            onClick={() => {
-                              setEditingClient(client.id);
-                              setClientForm({
-                                name: client.name || "",
-                                products:
-                                  client.products?.length > 0
-                                    ? client.products
-                                    : [{ name: "", price: "" }],
-                                paid: client.paid || false,
-                              });
-                              setClientErrors({});
-                              setShowClientModal(true);
-                            }}
-                          >
-                            Editar
-                          </button>
-
-                          <button
-                            className="delete-mini-btn"
-                            onClick={() => deleteClient(client.id)}
-                          >
-                            Eliminar
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
+                        ))
+                      )}
+                    </div>
                   </div>
                 )}
               </motion.div>
@@ -1655,14 +1984,14 @@ const deleteClient = async (id) => {
               </div>
             </div>
 
-          <div className="progress-card disabled-card">
-            <h2>Notificaciones (Próximamente)</h2>
-            <p>Los recordatorios automáticos estarán disponibles después.</p>
+            <div className="progress-card disabled-card">
+              <h2>Notificaciones (Próximamente)</h2>
+              <p>Los recordatorios automáticos estarán disponibles después.</p>
 
-            <button className="save-btn disabled-btn" disabled>
-              🔔 Activar notificaciones
-            </button>
-          </div>
+              <button className="save-btn disabled-btn" disabled>
+                🔔 Activar notificaciones
+              </button>
+            </div>
 
             <div className="progress-card">
               <h2>Tareas por categoría</h2>
@@ -1678,8 +2007,11 @@ const deleteClient = async (id) => {
             <div className="progress-card">
               <h2>Próximas entregas</h2>
 
-              {activeTasks.filter((task) => task.progressActive !== false).length === 0 ? (
-                <p className="empty-private">No hay próximas entregas activas.</p>
+              {activeTasks.filter((task) => task.progressActive !== false)
+                .length === 0 ? (
+                <p className="empty-private">
+                  No hay próximas entregas activas.
+                </p>
               ) : (
                 activeTasks
                   .filter((task) => task.progressActive !== false)
@@ -1846,7 +2178,7 @@ const deleteClient = async (id) => {
         )}
       </main>
 
-      {view === "Inicio" && (
+            {view === "Inicio" && (
         <button
           className="fab"
           onClick={() => {
@@ -1912,34 +2244,42 @@ const deleteClient = async (id) => {
 
               <h2>{selectedTask.title}</h2>
 
-<div className="task-progress-toggle">
-  <button
-    className={`client-check ${
-      selectedTask.progressActive === false ? "" : "paid"
-    }`}
-    onClick={async () => {
-      const newValue = selectedTask.progressActive === false ? true : false;
+              <div className="task-progress-toggle">
+                <button
+                  className={`client-check ${
+                    selectedTask.progressActive === false ? "" : "paid"
+                  }`}
+                  onClick={async () => {
+                    const newValue =
+                      selectedTask.progressActive === false ? true : false;
 
-      await updateDoc(doc(db, "users", user.uid, "tasks", selectedTask.id), {
-        progressActive: newValue,
-        updatedAt: serverTimestamp(),
-      });
+                    await updateDoc(
+                      doc(db, "users", user.uid, "tasks", selectedTask.id),
+                      {
+                        progressActive: newValue,
+                        updatedAt: serverTimestamp(),
+                      }
+                    );
 
-      setSelectedTask({
-        ...selectedTask,
-        progressActive: newValue,
-      });
-    }}
-  >
-    {selectedTask.progressActive === false ? <BadgeX /> : <BadgeCheck />}
-  </button>
+                    setSelectedTask({
+                      ...selectedTask,
+                      progressActive: newValue,
+                    });
+                  }}
+                >
+                  {selectedTask.progressActive === false ? (
+                    <BadgeX />
+                  ) : (
+                    <BadgeCheck />
+                  )}
+                </button>
 
-  <p className="progress-toggle-text">
-    {selectedTask.progressActive === false
-      ? "No aparece en Progreso."
-      : "Sí aparece en Progreso."}
-  </p>
-</div>
+                <p className="progress-toggle-text">
+                  {selectedTask.progressActive === false
+                    ? "No aparece en Progreso."
+                    : "Sí aparece en Progreso."}
+                </p>
+              </div>
 
               <p className="type">{selectedTask.type}</p>
 
@@ -1957,7 +2297,7 @@ const deleteClient = async (id) => {
                     <>
                       <h3>Jornada</h3>
 
-                      {selectedTask.workSegments.map((segment, index) => (
+                      {selectedTask.workSegments?.map((segment, index) => (
                         <p key={index}>
                           Entrada: {segment.start || "--:--"} · Salida:{" "}
                           {segment.end || "--:--"}
@@ -1978,39 +2318,53 @@ const deleteClient = async (id) => {
                         <strong>Total:</strong> ₡{getPayment(selectedTask)}{" "}
                         colones
                       </p>
+
+                      <div className="task-progress-toggle">
+                        <button
+                          className={`client-check ${
+                            selectedTask.hoursActive === false ? "" : "paid"
+                          }`}
+                          onClick={async () => {
+                            const newValue =
+                              selectedTask.hoursActive === false ? true : false;
+
+                            await updateDoc(
+                              doc(
+                                db,
+                                "users",
+                                user.uid,
+                                "tasks",
+                                selectedTask.id
+                              ),
+                              {
+                                hoursActive: newValue,
+                                updatedAt: serverTimestamp(),
+                              }
+                            );
+
+                            setSelectedTask({
+                              ...selectedTask,
+                              hoursActive: newValue,
+                            });
+                          }}
+                        >
+                          {selectedTask.hoursActive === false ? (
+                            <BadgeX />
+                          ) : (
+                            <BadgeCheck />
+                          )}
+                        </button>
+
+                        <p className="progress-toggle-text">
+                          {selectedTask.hoursActive === false
+                            ? "Estas horas no cuentan en Progreso."
+                            : "Estas horas sí cuentan en Progreso."}
+                        </p>
+                      </div>
                     </>
                   )}
                 </div>
               )}
-
-<div className="task-progress-toggle">
-  <button
-    className={`client-check ${
-      selectedTask.hoursActive === false ? "" : "paid"
-    }`}
-    onClick={async () => {
-      const newValue = selectedTask.hoursActive === false ? true : false;
-
-      await updateDoc(doc(db, "users", user.uid, "tasks", selectedTask.id), {
-        hoursActive: newValue,
-        updatedAt: serverTimestamp(),
-      });
-
-      setSelectedTask({
-        ...selectedTask,
-        hoursActive: newValue,
-      });
-    }}
-  >
-    {selectedTask.hoursActive === false ? <BadgeX /> : <BadgeCheck />}
-  </button>
-
-  <p className="progress-toggle-text">
-    {selectedTask.hoursActive === false
-      ? "Estas horas no cuentan en Progreso."
-      : "Estas horas sí cuentan en Progreso."}
-  </p>
-</div>
 
               <div className="date-box">
                 📅 {selectedTask.date || "Sin fecha"} ·{" "}
@@ -2091,6 +2445,98 @@ const deleteClient = async (id) => {
                   Eliminar
                 </button>
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {showNoteModal && (
+          <motion.div className="overlay" onClick={closeNoteModal}>
+            <motion.div
+              className={`note-modal ${noteForm.color}`}
+              initial={{ y: 80, opacity: 0, scale: 0.96 }}
+              animate={{ y: 0, opacity: 1, scale: 1 }}
+              exit={{ y: 80, opacity: 0, scale: 0.96 }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button className="back-btn" onClick={closeNoteModal}>
+                <X />
+              </button>
+
+              {noteMode === "view" ? (
+                <>
+                  <div className="note-modal-header">
+                    <span className="note-emoji">📝</span>
+                    <small>{formatNoteDate(selectedNote)}</small>
+                  </div>
+
+                  <h2>{selectedNote?.title}</h2>
+
+                  <p className="note-full-content">
+                    {selectedNote?.content || "Sin contenido adicional."}
+                  </p>
+
+                  <div className="detail-actions">
+                    <button
+                      className="edit-btn"
+                      onClick={() => openEditNote(selectedNote)}
+                    >
+                      <Pencil size={18} />
+                      Editar
+                    </button>
+
+                    <button
+                      className="delete-btn"
+                      onClick={() => deleteNote(selectedNote.id)}
+                    >
+                      <Trash2 size={18} />
+                      Eliminar
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h2>{noteMode === "edit" ? "Editar nota" : "Nueva nota"}</h2>
+
+                  <input
+                    placeholder="Título de la nota"
+                    value={noteForm.title}
+                    onChange={(e) =>
+                      setNoteForm({ ...noteForm, title: e.target.value })
+                    }
+                  />
+
+                  {noteErrors.title && (
+                    <span className="field-error">{noteErrors.title}</span>
+                  )}
+
+                  <textarea
+                    className="note-editor-textarea"
+                    placeholder="Escribe tu nota..."
+                    value={noteForm.content}
+                    onChange={(e) =>
+                      setNoteForm({ ...noteForm, content: e.target.value })
+                    }
+                  />
+
+                  <div className="note-color-picker">
+                    {NOTE_COLORS.map((color) => (
+                      <button
+                        key={color}
+                        className={`note-color-dot ${color} ${
+                          noteForm.color === color ? "active" : ""
+                        }`}
+                        onClick={() => setNoteForm({ ...noteForm, color })}
+                        type="button"
+                      />
+                    ))}
+                  </div>
+
+                  <button className="save-btn" onClick={saveNote}>
+                    <Save size={18} />
+                    {noteMode === "edit" ? "Guardar cambios" : "Guardar nota"}
+                  </button>
+                </>
+              )}
             </motion.div>
           </motion.div>
         )}
