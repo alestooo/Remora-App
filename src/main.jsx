@@ -1,10 +1,10 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.jsx";
-import "./App.css";
-
-ReactDOM.createRoot(document.getElementById("root")).render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
+import "./styles/app.css";
+import "./styles/tasks.css";
+import "./styles/notes.css";
+import "./styles/tools.css";
+import "./styles/progress.css";
+import "./styles/accounts.css";
+ReactDOM.createRoot(document.getElementById("root")).render(<React.StrictMode><App /></React.StrictMode>);

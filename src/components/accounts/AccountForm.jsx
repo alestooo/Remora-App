@@ -1,0 +1,4 @@
+export default function AccountForm({ accountForm, setAccountForm, accountErrors, saveAccount }) {
+  const update = (field) => (e) => setAccountForm({ ...accountForm, [field]: e.target.value });
+  return <><h2>Nueva cuenta</h2><input placeholder="Título" value={accountForm.title} onChange={update("title")} />{accountErrors.title && <span className="field-error">{accountErrors.title}</span>}<input placeholder="Usuario" value={accountForm.username} onChange={update("username")} /><input placeholder="Cédula" value={accountForm.cedula} onChange={update("cedula")} /><input placeholder="Correo" value={accountForm.email} onChange={update("email")} /><input placeholder="User" value={accountForm.user} onChange={update("user")} /><input placeholder="Contraseña" value={accountForm.password} onChange={update("password")} /><input placeholder="PIN" value={accountForm.pin} onChange={update("pin")} /><button className="save-btn" onClick={saveAccount}>Guardar cuenta</button></>;
+}
