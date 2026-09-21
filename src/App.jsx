@@ -1,1470 +1,2258 @@
-import { useEffect, useMemo, useState } from "react";
-import { AnimatePresence } from "framer-motion";
-import { PointerSensor, TouchSensor, useSensor, useSensors } from "@dnd-kit/core";
-import { arrayMove } from "@dnd-kit/sortable";
-import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
-import { collection, doc, setDoc, deleteDoc, updateDoc, onSnapshot, query, orderBy, serverTimestamp, writeBatch } from "firebase/firestore";
-import { LogOut, Plus } from "lucide-react";
-import { auth, provider, db } from "./services/firebase";
-import { requestNotificationPermission } from "./services/notifications";
-import { registerPasskey, unlockWithPasskey } from "./services/passkey";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
+
+import {
+  AnimatePresence,
+} from "framer-motion";
+
+import {
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+} from "@dnd-kit/core";
+
+import {
+  LogOut,
+  MoreHorizontal,
+  Plus,
+  Search,
+  Settings,
+  X,
+} from "lucide-react";
+
 import icono from "./assets/icono.png";
-import { DESKTOP_COVERS, MOBILE_COVERS, ITEMS_PER_PAGE, NOTES_PER_PAGE, MASTER_PASSWORD, UNLOCK_TIME, HOURLY_RATE } from "./constants/app";
-import { getTodayDate } from "./utils/dates";
-import { calculateClientTotal } from "./utils/currency";
-import { calculateHours, createNoteId, isMobileDevice } from "./utils/taskHelpers";
+
+import {
+  DEFAULT_PREFERENCES,
+  DESKTOP_COVERS,
+  MOBILE_COVERS,
+} from "./constants/app";
+
+import {
+  isExpiredTask,
+} from "./utils/dates";
+
+import {
+  notificationSupported,
+  requestNotificationPermission,
+} from "./services/notifications";
+
+import {
+  downloadBackup,
+  importBackupFile,
+} from "./services/backup";
+
+import useAuth from "./hooks/useAuth";
+import useTasks from "./hooks/useTasks";
+import useTaskWorkspace from "./hooks/useTaskWorkspace";
 import useNotes from "./hooks/useNotes";
+import useNotesWorkspace from "./hooks/useNotesWorkspace";
 import useClients from "./hooks/useClients";
+import useClientsWorkspace from "./hooks/useClientsWorkspace";
+import useSecurityData from "./hooks/useSecurityData";
+import useSecurity from "./hooks/useSecurity";
 import useAccounts from "./hooks/useAccounts";
+import useAccountVault from "./hooks/useAccountVault";
+import usePreferences from "./hooks/usePreferences";
+import useOnlineStatus from "./hooks/useOnlineStatus";
+import useInstallPrompt from "./hooks/useInstallPrompt";
+
 import HomePage from "./pages/HomePage";
 import ToolsPage from "./pages/ToolsPage";
 import ProgressPage from "./pages/ProgressPage";
 import AccountsPage from "./pages/AccountsPage";
+import SettingsPage from "./pages/SettingsPage";
+
 import BottomNavigation from "./components/navigation/BottomNavigation";
+
 import TaskDetail from "./components/tasks/TaskDetail";
 import TaskModal from "./components/tasks/TaskModal";
+
 import NoteEditor from "./components/notes/NoteEditor";
+
 import AccountModal from "./components/accounts/AccountModal";
+import RecoveryCodeModal from "./components/accounts/RecoveryCodeModal";
+
 import ClientModal from "./components/clients/ClientModal";
+
 import ConfirmDialog from "./components/common/ConfirmDialog";
 
+import DashboardSettings from "./components/dashboard/DashboardSettings";
+
+import GlobalSearch from "./components/search/GlobalSearch";
+
 function App() {
-  const emptyForm = {
-    title: "",
-    type: "Universidad",
-    course: "Pensamiento Crítico",
-    alekeyRole: "Encargado",
-    description: "",
-    date: "",
-    time: "",
-    priority: "Media",
-    progressActive: true,
-    hoursActive: true,
-    checklist: "",
-    resources: [{ name: "", url: "", type: "PDF" }],
-    driveFolderUrl: "",
-    workSegments: [{ start: "", end: "" }],
-    totalHours: "",
-    hourlyRate: "1500",
-  };
+  const [
+    alertData,
+    setAlertData,
+  ] = useState(null);
 
-  const emptyAccountForm = {
-    title: "",
-    username: "",
-    cedula: "",
-    email: "",
-    user: "",
-    password: "",
-    pin: "",
-  };
+  const showAlert =
+    useCallback(
+      (data) =>
+        setAlertData(
+          data
+        ),
+      []
+    );
 
-  const emptyClientForm = {
-    name: "",
-    products: [{ name: "", price: "" }],
-    paid: false,
-  };
+  const closeAlert =
+    useCallback(
+      () =>
+        setAlertData(
+          null
+        ),
+      []
+    );
 
-  const emptyNoteForm = {
-    title: "",
-    content: "",
-    color: "note-red",
-    pinned: false,
-    blocks: [],
-  };
+  /* =========================================================
+     AUTH
+  ========================================================= */
 
-  const [user, setUser] = useState(null);
-  const [authLoading, setAuthLoading] = useState(true);
-  const [tasksLoading, setTasksLoading] = useState(false);
+  const {
+    user,
+    authLoading,
+    login,
+    logout,
+  } = useAuth({
+    onLoginError:
+      (error) =>
+        showAlert({
+          type:
+            "warning",
 
-  const [view, setView] = useState("Inicio");
-  const [tasks, setTasks] = useState([]);
-  const [toolsData, setToolsData] = useState({ quickNote: "" });
-  const { accounts, securityData } = useAccounts(user);
-  const { clients } = useClients(user);
+          title:
+            "No se pudo iniciar sesión",
 
-  const [filter, setFilter] = useState("Todas");
-  const [page, setPage] = useState(1);
-  const [showExpired, setShowExpired] = useState(false);
-  const [editingClient, setEditingClient] = useState(null);
+          message:
+            error.message,
 
-  const [showModal, setShowModal] = useState(false);
-  const [selectedTask, setSelectedTask] = useState(null);
-  const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState(emptyForm);
-  const [originalForm, setOriginalForm] = useState(null);
+          confirmText:
+            "Entendido",
 
-  const [showAccountModal, setShowAccountModal] = useState(false);
-  const [accountForm, setAccountForm] = useState(emptyAccountForm);
-  const [visibleAccountId, setVisibleAccountId] = useState(null);
-  const [accountsUnlocked, setAccountsUnlocked] = useState(false);
-  const [accountsUnlockEnd, setAccountsUnlockEnd] = useState(null);
-  const [unlockSecondsLeft, setUnlockSecondsLeft] = useState(0);
-  const [mobilePasskeyAvailable, setMobilePasskeyAvailable] = useState(false);
-  const [masterInput, setMasterInput] = useState("");
-  const [accountErrors, setAccountErrors] = useState({});
+          onlyConfirm:
+            true,
 
-  const [selectedTool, setSelectedTool] = useState(null);
+          onConfirm:
+            closeAlert,
+        }),
+  });
 
-  const [gradeScore, setGradeScore] = useState("");
-  const [gradeTotal, setGradeTotal] = useState("");
+  /* =========================================================
+     TASKS
+  ========================================================= */
 
-  const [calcA, setCalcA] = useState("");
-  const [calcB, setCalcB] = useState("");
-  const [calcOperation, setCalcOperation] = useState("+");
+  const taskStore =
+    useTasks(
+      user,
+      {
+        onLoadError:
+          () =>
+            showAlert({
+              type:
+                "warning",
 
-  const [showClientModal, setShowClientModal] = useState(false);
-  const [clientForm, setClientForm] = useState(emptyClientForm);
-  const [clientErrors, setClientErrors] = useState({});
+              title:
+                "Error al cargar tareas",
 
-  const { notes, setNotes } = useNotes(user);
-  const [noteForm, setNoteForm] = useState(emptyNoteForm);
-  const [selectedNote, setSelectedNote] = useState(null);
-  const [showNoteModal, setShowNoteModal] = useState(false);
-  const [noteMode, setNoteMode] = useState("create");
-  const [noteErrors, setNoteErrors] = useState({});
-  const [notePage, setNotePage] = useState(1);
-  const [notesReorderMode, setNotesReorderMode] = useState(false);
-  const [noteSearch, setNoteSearch] = useState("");
-  const [noteMenuId, setNoteMenuId] = useState(null);
+              message:
+                "No se pudieron cargar tus actividades desde Firestore.",
 
-  const [errors, setErrors] = useState({});
-  const [alertData, setAlertData] = useState(null);
-  const [passwordInput, setPasswordInput] = useState("");
+              confirmText:
+                "Entendido",
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    }),
-    useSensor(TouchSensor, {
-      activationConstraint: {
-        delay: 650,
-        tolerance: 8,
-      },
-    })
+              onlyConfirm:
+                true,
+
+              onConfirm:
+                closeAlert,
+            }),
+      }
+    );
+
+  const taskWorkspace =
+    useTaskWorkspace({
+      user,
+
+      tasks:
+        taskStore.tasks,
+
+      createTask:
+        taskStore.createTask,
+
+      updateTask:
+        taskStore.updateTask,
+
+      removeTask:
+        taskStore.removeTask,
+
+      toggleChecklistItem:
+        taskStore.toggleChecklistItem,
+
+      toggleCompleted:
+        taskStore.toggleCompleted,
+
+      toggleArchived:
+        taskStore.toggleArchived,
+
+      toggleProgress:
+        taskStore.toggleProgress,
+
+      toggleHours:
+        taskStore.toggleHours,
+
+      showAlert,
+
+      closeAlert,
+    });
+
+  /* =========================================================
+     NOTES
+  ========================================================= */
+
+  const notesStore =
+    useNotes(user);
+
+  const notesWorkspace =
+    useNotesWorkspace({
+      user,
+
+      notes:
+        notesStore.notes,
+
+      setNotes:
+        notesStore.setNotes,
+
+      showAlert,
+
+      closeAlert,
+    });
+
+  /* =========================================================
+     CLIENTS
+  ========================================================= */
+
+  const {
+    clients,
+  } = useClients(
+    user
   );
 
-  const [isMobileCover, setIsMobileCover] = useState(window.innerWidth <= 768);
+  const clientsWorkspace =
+    useClientsWorkspace({
+      user,
+
+      showAlert,
+
+      closeAlert,
+    });
+
+  /* =========================================================
+     SECURITY / ACCOUNTS
+  ========================================================= */
+
+  const {
+    securityData,
+    securityLoading,
+  } =
+    useSecurityData(
+      user
+    );
+
+  const security =
+    useSecurity({
+      user,
+
+      securityData,
+
+      showAlert,
+    });
+
+  const {
+    accounts,
+    accountsLoading,
+  } =
+    useAccounts(
+      user,
+      security.vaultKey
+    );
+
+  const accountVault =
+    useAccountVault({
+      user,
+
+      security,
+
+      showAlert,
+
+      closeAlert,
+    });
+
+  /* =========================================================
+     PREFERENCES / PWA
+  ========================================================= */
+
+  const {
+    preferences,
+    savePreferences,
+  } =
+    usePreferences(
+      user
+    );
+
+  const online =
+    useOnlineStatus();
+
+  const {
+    canInstall,
+    installed,
+    install,
+  } =
+    useInstallPrompt();
+
+  /* =========================================================
+     APP STATE
+  ========================================================= */
+
+  const [
+    view,
+    setView,
+  ] =
+    useState(
+      "Inicio"
+    );
+
+  const [
+    previousView,
+    setPreviousView,
+  ] =
+    useState(
+      "Inicio"
+    );
+
+  const [
+    selectedTool,
+    setSelectedTool,
+  ] =
+    useState(
+      null
+    );
+
+  const [
+    searchOpen,
+    setSearchOpen,
+  ] =
+    useState(
+      false
+    );
+
+  const [
+    globalSearch,
+    setGlobalSearch,
+  ] =
+    useState(
+      ""
+    );
+
+  const [
+    showDashboardSettings,
+    setShowDashboardSettings,
+  ] =
+    useState(
+      false
+    );
+
+  const [
+    dashboardDraft,
+    setDashboardDraft,
+  ] =
+    useState(
+      DEFAULT_PREFERENCES.dashboardCards
+    );
+
+  const [
+    backupBusy,
+    setBackupBusy,
+  ] =
+    useState(
+      false
+    );
+
+  const [
+    gradeScore,
+    setGradeScore,
+  ] =
+    useState(
+      ""
+    );
+
+  const [
+    gradeTotal,
+    setGradeTotal,
+  ] =
+    useState(
+      ""
+    );
+
+  const [
+    calcA,
+    setCalcA,
+  ] =
+    useState(
+      ""
+    );
+
+  const [
+    calcB,
+    setCalcB,
+  ] =
+    useState(
+      ""
+    );
+
+  const [
+    calcOperation,
+    setCalcOperation,
+  ] =
+    useState(
+      "+"
+    );
+
+  const [
+    isMobileCover,
+    setIsMobileCover,
+  ] =
+    useState(
+      window.innerWidth <=
+        768
+    );
+
+  const [
+    mobileHeaderMenuOpen,
+    setMobileHeaderMenuOpen,
+  ] =
+    useState(
+      false
+    );
+
+  const mobileHeaderMenuRef =
+    useRef(null);
+
+  /* =========================================================
+     DND
+  ========================================================= */
+
+  const sensors =
+    useSensors(
+      useSensor(
+        PointerSensor,
+        {
+          activationConstraint:
+            {
+              distance: 8,
+            },
+        }
+      ),
+
+      useSensor(
+        TouchSensor,
+        {
+          activationConstraint:
+            {
+              delay: 650,
+
+              tolerance: 8,
+            },
+        }
+      )
+    );
+
+  /* =========================================================
+     RESPONSIVE COVER
+  ========================================================= */
 
   useEffect(() => {
-    const handleResize = () => {
-      setIsMobileCover(window.innerWidth <= 768);
-    };
+    const resize =
+      () =>
+        setIsMobileCover(
+          window.innerWidth <=
+            768
+        );
 
-    window.addEventListener("resize", handleResize);
+    window.addEventListener(
+      "resize",
+      resize
+    );
 
-    return () => window.removeEventListener("resize", handleResize);
+    return () =>
+      window.removeEventListener(
+        "resize",
+        resize
+      );
   }, []);
 
-  const DEFAULT_COVERS = isMobileCover ? MOBILE_COVERS : DESKTOP_COVERS;
-
-  const showAlert = (data) => setAlertData(data);
-  const closeAlert = () => setAlertData(null);
-
-  const goToView = (nextView) => {
-    setView(nextView);
-    setSelectedTool(null);
-
-    setTimeout(() => {
-      window.scrollTo({ top: 0, behavior: "smooth" });
-    }, 50);
-  };
+  /* =========================================================
+     KEYBOARD SEARCH
+  ========================================================= */
 
   useEffect(() => {
-    setMobilePasskeyAvailable(isMobileDevice());
+    const onKeyDown =
+      (event) => {
+        if (
+          (
+            event.ctrlKey ||
+            event.metaKey
+          ) &&
+          event.key.toLowerCase() ===
+            "k"
+        ) {
+          event.preventDefault();
+
+          setSearchOpen(
+            true
+          );
+        }
+
+        if (
+          event.key ===
+          "Escape"
+        ) {
+          setSearchOpen(
+            false
+          );
+        }
+      };
+
+    window.addEventListener(
+      "keydown",
+      onKeyDown
+    );
+
+    return () =>
+      window.removeEventListener(
+        "keydown",
+        onKeyDown
+      );
   }, []);
 
+  /* =========================================================
+     MOBILE HEADER MENU
+  ========================================================= */
+
   useEffect(() => {
-    let mounted = true;
+    if (
+      !mobileHeaderMenuOpen
+    ) {
+      return undefined;
+    }
 
-    const fallback = setTimeout(() => {
-      if (mounted) setAuthLoading(false);
-    }, 3000);
+    const handlePointerDown =
+      (event) => {
+        if (
+          mobileHeaderMenuRef.current &&
+          !mobileHeaderMenuRef.current.contains(
+            event.target
+          )
+        ) {
+          setMobileHeaderMenuOpen(
+            false
+          );
+        }
+      };
 
-    const unsubscribe = onAuthStateChanged(
-      auth,
-      (currentUser) => {
-        clearTimeout(fallback);
-        if (!mounted) return;
+    const handleEscape =
+      (event) => {
+        if (
+          event.key ===
+          "Escape"
+        ) {
+          setMobileHeaderMenuOpen(
+            false
+          );
+        }
+      };
 
-        setUser(currentUser);
-        setAuthLoading(false);
-      },
-      (error) => {
-        clearTimeout(fallback);
-        console.error("Auth error:", error);
-        if (!mounted) return;
+    document.addEventListener(
+      "pointerdown",
+      handlePointerDown
+    );
 
-        setAuthLoading(false);
-      }
+    window.addEventListener(
+      "keydown",
+      handleEscape
     );
 
     return () => {
-      mounted = false;
-      clearTimeout(fallback);
-      unsubscribe();
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!user) return;
-
-    const savedEnd = localStorage.getItem(`remora_accounts_unlock_${user.uid}`);
-
-    if (savedEnd && Number(savedEnd) > Date.now()) {
-      setAccountsUnlocked(true);
-      setAccountsUnlockEnd(Number(savedEnd));
-    }
-  }, [user]);
-
-  useEffect(() => {
-    if (!accountsUnlocked || !accountsUnlockEnd) return;
-
-    const interval = setInterval(() => {
-      const left = Math.max(
-        0,
-        Math.ceil((accountsUnlockEnd - Date.now()) / 1000)
+      document.removeEventListener(
+        "pointerdown",
+        handlePointerDown
       );
 
-      setUnlockSecondsLeft(left);
-
-      if (left <= 0) {
-        setAccountsUnlocked(false);
-        setVisibleAccountId(null);
-        setAccountsUnlockEnd(null);
-
-        if (user) {
-          localStorage.removeItem(`remora_accounts_unlock_${user.uid}`);
-        }
-      }
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [accountsUnlocked, accountsUnlockEnd, user]);
-
-  useEffect(() => {
-    if (!user) {
-      setTasks([]);
-      setSelectedTask(null);
-      return;
-    }
-
-    setTasksLoading(true);
-
-    const tasksRef = collection(db, "users", user.uid, "tasks");
-    const q = query(tasksRef, orderBy("createdAt", "desc"));
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const userTasks = snapshot.docs.map((document) => ({
-          id: document.id,
-          ...document.data(),
-        }));
-
-        setTasks(userTasks);
-        setTasksLoading(false);
-      },
-      () => {
-        setTasksLoading(false);
-        showAlert({
-          type: "warning",
-          title: "Error al cargar tareas",
-          message: "No se pudieron cargar tus tareas desde la base de datos.",
-          confirmText: "Entendido",
-          onlyConfirm: true,
-          onConfirm: closeAlert,
-        });
-      }
-    );
-
-    return () => unsubscribe();
-  }, [user]);
-
-  useEffect(() => {
-    if (!user) return;
-
-    const toolsRef = doc(db, "users", user.uid, "meta", "tools");
-
-    const unsubscribe = onSnapshot(toolsRef, (snapshot) => {
-      if (snapshot.exists()) {
-        setToolsData(snapshot.data());
-      } else {
-        setToolsData({ quickNote: "" });
-      }
-    });
-
-    return () => unsubscribe();
-  }, [user]);
-
-    const handleLogin = async () => {
-    try {
-      await signInWithPopup(auth, provider);
-    } catch (error) {
-      showAlert({
-        type: "warning",
-        title: "No se pudo iniciar sesión",
-        message: error.message,
-        confirmText: "Entendido",
-        onlyConfirm: true,
-        onConfirm: closeAlert,
-      });
-    }
-  };
-
-  const handleLogout = async () => {
-    await signOut(auth);
-    setTasks([]);
-    setSelectedTask(null);
-    setAccountsUnlocked(false);
-    setVisibleAccountId(null);
-  };
-
-  const enableNotifications = async () => {
-    try {
-      await requestNotificationPermission(user);
-
-      showAlert({
-        type: "success",
-        title: "Notificaciones activadas",
-        message: "Remora ya puede enviarte recordatorios en este dispositivo.",
-        confirmText: "Listo",
-        onlyConfirm: true,
-        onConfirm: closeAlert,
-      });
-    } catch (error) {
-      showAlert({
-        type: "warning",
-        title: "No se pudieron activar",
-        message: error.message,
-        confirmText: "Entendido",
-        onlyConfirm: true,
-        onConfirm: closeAlert,
-      });
-    }
-  };
-
-  const getCover = (task) => DEFAULT_COVERS[task.type];
-
-  const isExpired = (task) => {
-    if (!task.date) return false;
-
-    const todayDate = getTodayDate();
-
-    if (task.date < todayDate) return true;
-
-    if (task.date === todayDate && task.time) {
-      return new Date(`${task.date}T${task.time}`) < new Date();
-    }
-
-    return false;
-  };
-
-  const filteredTasks = useMemo(() => {
-    const base =
-      filter === "Todas"
-        ? tasks
-        : tasks.filter((task) => task.type === filter);
-
-    return [...base].sort((a, b) => {
-      if (!a.date) return 1;
-      if (!b.date) return -1;
-      return a.date.localeCompare(b.date);
-    });
-  }, [tasks, filter]);
-
-  const activeTasks = filteredTasks.filter((task) => !isExpired(task));
-  const expiredTasks = filteredTasks.filter((task) => isExpired(task));
-
-  const totalPages = Math.max(
-    1,
-    Math.ceil(activeTasks.length / ITEMS_PER_PAGE)
-  );
-
-  const visibleTasks = activeTasks.slice(
-    (page - 1) * ITEMS_PER_PAGE,
-    page * ITEMS_PER_PAGE
-  );
-
-  const groupedVisibleTasks = useMemo(() => {
-    const groups = {};
-
-    visibleTasks.forEach((task) => {
-      const key = task.date || "Sin fecha";
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(task);
-    });
-
-    return groups;
-  }, [visibleTasks]);
-
-  const groupedExpiredTasks = useMemo(() => {
-    const groups = {};
-
-    expiredTasks.forEach((task) => {
-      const key = task.date || "Sin fecha";
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(task);
-    });
-
-    return groups;
-  }, [expiredTasks]);
-
-const filteredNotes = useMemo(() => {
-  const search = noteSearch.trim().toLowerCase();
-
-  const base = [...notes].sort((a, b) => {
-    if ((a.pinned ?? false) !== (b.pinned ?? false)) {
-      return a.pinned ? -1 : 1;
-    }
-
-    return Number(a.position || 0) - Number(b.position || 0);
-  });
-
-  if (!search) return base;
-
-  return base.filter((note) => {
-    const blocksText = (note.blocks || [])
-      .map((block) => {
-        if (block.type === "text") return block.text || "";
-        if (block.type === "checklist") {
-          return (block.items || []).map((item) => item.text).join(" ");
-        }
-        if (block.type === "pending") {
-          return `${block.person || ""} ${block.amount || ""}`;
-        }
-        return "";
-      })
-      .join(" ");
-
-    return `${note.title || ""} ${note.content || ""} ${blocksText}`
-      .toLowerCase()
-      .includes(search);
-  });
-}, [notes, noteSearch]);
-
-const visibleNotes = useMemo(() => {
-  return filteredNotes.slice(
-    (notePage - 1) * NOTES_PER_PAGE,
-    notePage * NOTES_PER_PAGE
-  );
-}, [filteredNotes, notePage]);
-
-const totalNotePages = Math.max(
-  1,
-  Math.ceil(filteredNotes.length / NOTES_PER_PAGE)
-);
-
-const openCreateNote = () => {
-  setNoteMode("create");
-  setNoteForm(emptyNoteForm);
-  setSelectedNote(null);
-  setNoteErrors({});
-  setShowNoteModal(true);
-};
-
-const openViewNote = (note) => {
-  setNoteMode("view");
-  setSelectedNote(note);
-  setNoteForm({
-    title: note.title || "",
-    content: note.content || "",
-    color: note.color || "note-red",
-    pinned: note.pinned || false,
-    blocks: note.blocks || [],
-  });
-  setNoteErrors({});
-  setShowNoteModal(true);
-};
-
-const openEditNote = (note) => {
-  setNoteMenuId(null);
-  setNoteMode("edit");
-  setSelectedNote(note);
-  setNoteForm({
-    title: note.title || "",
-    content: note.content || "",
-    color: note.color || "note-red",
-    pinned: note.pinned || false,
-    blocks: note.blocks || [],
-  });
-  setNoteErrors({});
-  setShowNoteModal(true);
-};
-
-  const closeNoteModal = () => {
-    setShowNoteModal(false);
-    setSelectedNote(null);
-    setNoteForm(emptyNoteForm);
-    setNoteErrors({});
-    setNoteMode("create");
-  };
-
-const saveNote = async () => {
-  const newErrors = {};
-
-  if (!noteForm.title.trim()) {
-    newErrors.title = "Agrega un título.";
-  }
-
-  setNoteErrors(newErrors);
-  if (Object.keys(newErrors).length > 0) return;
-
-  const cleanedBlocks = (noteForm.blocks || []).map((block) => {
-    if (block.type === "checklist") {
-      return {
-        ...block,
-        items: (block.items || []).filter((item) => item.text.trim()),
-      };
-    }
-
-    if (block.type === "pending") {
-      return {
-        ...block,
-        person: block.person || "",
-        amount: block.amount || "",
-      };
-    }
-
-    return block;
-  });
-
-  if (noteMode === "edit" && selectedNote) {
-    await updateDoc(doc(db, "users", user.uid, "notes", selectedNote.id), {
-      title: noteForm.title,
-      content: noteForm.content,
-      color: noteForm.color,
-      pinned: noteForm.pinned || false,
-      blocks: cleanedBlocks,
-      updatedAt: serverTimestamp(),
-    });
-  } else {
-    const noteRef = doc(collection(db, "users", user.uid, "notes"));
-
-    await setDoc(noteRef, {
-      id: noteRef.id,
-      title: noteForm.title,
-      content: noteForm.content,
-      color: noteForm.color,
-      pinned: noteForm.pinned || false,
-      blocks: cleanedBlocks,
-      position: notes.length,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-  }
-
-  closeNoteModal();
-};
-
-  const deleteNote = (noteId) => {
-    showAlert({
-      type: "danger",
-      title: "Eliminar nota",
-      message: "¿Seguro que quieres eliminar esta nota?",
-      confirmText: "Sí, eliminar",
-      cancelText: "Cancelar",
-      onConfirm: async () => {
-        await deleteDoc(doc(db, "users", user.uid, "notes", noteId));
-        closeAlert();
-        closeNoteModal();
-      },
-    });
-  };
-
-const toggleNotePinned = async (note) => {
-  const newPinnedValue = !(note.pinned || false);
-
-  const updatedNote = {
-    ...note,
-    pinned: newPinnedValue,
-  };
-
-  setSelectedNote((prev) =>
-    prev && prev.id === note.id ? updatedNote : prev
-  );
-
-  setNotes((prev) =>
-    prev.map((item) => (item.id === note.id ? updatedNote : item))
-  );
-
-  await updateDoc(doc(db, "users", user.uid, "notes", note.id), {
-    pinned: newPinnedValue,
-    updatedAt: serverTimestamp(),
-  });
-
-  setNoteMenuId(null);
-};
-
-const addNoteTextBlock = () => {
-  setNoteForm({
-    ...noteForm,
-    blocks: [
-      ...noteForm.blocks,
-      {
-        id: createNoteId(),
-        type: "text",
-        text: "",
-      },
-    ],
-  });
-};
-
-const addNoteChecklistBlock = () => {
-  setNoteForm({
-    ...noteForm,
-    blocks: [
-      ...noteForm.blocks,
-      {
-        id: createNoteId(),
-        type: "checklist",
-        title: `Checklist ${noteForm.blocks.filter((b) => b.type === "checklist").length + 1}`,
-        items: [
-          {
-            id: createNoteId(),
-            text: "",
-            done: false,
-          },
-        ],
-      },
-    ],
-  });
-};
-
-const addNotePendingBlock = () => {
-  setNoteForm({
-    ...noteForm,
-    blocks: [
-      ...noteForm.blocks,
-      {
-        id: createNoteId(),
-        type: "pending",
-        person: "",
-        amount: "",
-      },
-    ],
-  });
-};
-
-const updateNoteBlock = (blockId, field, value) => {
-  setNoteForm({
-    ...noteForm,
-    blocks: noteForm.blocks.map((block) =>
-      block.id === blockId ? { ...block, [field]: value } : block
-    ),
-  });
-};
-
-const removeNoteBlock = (blockId) => {
-  setNoteForm({
-    ...noteForm,
-    blocks: noteForm.blocks.filter((block) => block.id !== blockId),
-  });
-};
-
-const addChecklistItem = (blockId) => {
-  setNoteForm({
-    ...noteForm,
-    blocks: noteForm.blocks.map((block) =>
-      block.id === blockId
-        ? {
-            ...block,
-            items: [
-              ...(block.items || []),
-              {
-                id: createNoteId(),
-                text: "",
-                done: false,
-              },
-            ],
-          }
-        : block
-    ),
-  });
-};
-
-const updateChecklistItem = (blockId, itemId, field, value) => {
-  setNoteForm({
-    ...noteForm,
-    blocks: noteForm.blocks.map((block) =>
-      block.id === blockId
-        ? {
-            ...block,
-            items: block.items.map((item) =>
-              item.id === itemId ? { ...item, [field]: value } : item
-            ),
-          }
-        : block
-    ),
-  });
-};
-
-const toggleChecklistItemInNote = async (note, blockId, itemId) => {
-  const updatedBlocks = (note.blocks || []).map((block) =>
-    block.id === blockId
-      ? {
-          ...block,
-          items: (block.items || []).map((item) =>
-            item.id === itemId ? { ...item, done: !item.done } : item
-          ),
-        }
-      : block
-  );
-
-  const updatedNote = {
-    ...note,
-    blocks: updatedBlocks,
-  };
-
-  setSelectedNote((prev) =>
-    prev && prev.id === note.id ? updatedNote : prev
-  );
-
-  setNotes((prev) =>
-    prev.map((item) => (item.id === note.id ? updatedNote : item))
-  );
-
-  await updateDoc(doc(db, "users", user.uid, "notes", note.id), {
-    blocks: updatedBlocks,
-    updatedAt: serverTimestamp(),
-  });
-};
-
-  const handleNoteDragEnd = async (event) => {
-    const { active, over } = event;
-
-    if (!over || active.id === over.id) return;
-
-    const oldIndex = notes.findIndex((note) => note.id === active.id);
-    const newIndex = notes.findIndex((note) => note.id === over.id);
-
-    if (oldIndex === -1 || newIndex === -1) return;
-
-    const reorderedNotes = arrayMove(notes, oldIndex, newIndex);
-
-    setNotes(reorderedNotes);
-
-    const batch = writeBatch(db);
-
-    reorderedNotes.forEach((note, index) => {
-      const noteRef = doc(db, "users", user.uid, "notes", note.id);
-
-      batch.update(noteRef, {
-        position: index,
-        updatedAt: serverTimestamp(),
-      });
-    });
-
-    await batch.commit();
-  };
-
-  const formatNoteDate = (note) => {
-    if (!note?.createdAt?.toDate) return "Hoy";
-
-    return note.createdAt.toDate().toLocaleDateString("es-CR", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    });
-  };
-
-  const formChanged = () => {
-    if (!originalForm) return false;
-    return JSON.stringify(form) !== JSON.stringify(originalForm);
-  };
-
-  const closeForm = () => {
-    if (editing && formChanged()) {
-      showAlert({
-        type: "warning",
-        title: "Cambios sin guardar",
-        message: "¿Quieres salir sin guardar los cambios?",
-        confirmText: "Sí, salir",
-        cancelText: "No, volver",
-        onConfirm: () => {
-          setShowModal(false);
-          setEditing(false);
-          setErrors({});
-          setForm(emptyForm);
-          setOriginalForm(null);
-          closeAlert();
-        },
-      });
-      return;
-    }
-
-    setShowModal(false);
-    setEditing(false);
-    setErrors({});
-    setForm(emptyForm);
-    setOriginalForm(null);
-  };
-
-  const validateForm = () => {
-    const newErrors = {};
-
-    if (!form.title.trim()) newErrors.title = "Agrega un título.";
-    if (!form.description.trim())
-      newErrors.description = "Agrega una descripción.";
-    if (!form.date) newErrors.date = "Agrega una fecha.";
-
-    if (form.type === "Alekey") {
-      if (form.alekeyRole === "Encargado" && !form.time) {
-        newErrors.time = "Agrega una hora de entrega.";
-      }
-
-      if (form.alekeyRole === "Trabajador") {
-        const hasValidSegment = form.workSegments.some(
-          (segment) => segment.start && segment.end
-        );
-
-        if (!hasValidSegment) {
-          newErrors.workSegments = "Agrega al menos una entrada y salida.";
-        }
-      }
-    } else {
-      if (!form.time) newErrors.time = "Agrega una hora.";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
-
-  const buildChecklist = () =>
-    form.checklist
-      .split("\n")
-      .filter((item) => item.trim() !== "")
-      .map((item) => {
-        const oldItem = editing
-          ? selectedTask.checklist.find(
-              (old) => old.text.trim() === item.trim()
-            )
-          : null;
-
-        return {
-          text: item,
-          done: oldItem ? oldItem.done : false,
-        };
-      });
-
-  const saveTask = async () => {
-    if (!validateForm()) {
-      showAlert({
-        type: "warning",
-        title: "Falta información",
-        message: "Revisa los campos marcados en rojo antes de guardar.",
-        confirmText: "Entendido",
-        onlyConfirm: true,
-        onConfirm: closeAlert,
-      });
-      return;
-    }
-
-    const taskData = {
-      userId: user.uid,
-      title: form.title,
-      type: form.type,
-      course: form.type === "Universidad" ? form.course : "",
-      alekeyRole: form.type === "Alekey" ? form.alekeyRole : "",
-      description: form.description,
-      date: form.date,
-      time: form.time,
-      priority: form.priority,
-      progressActive: form.progressActive ?? true,
-      resources: form.resources.filter(
-        (resource) => resource.name.trim() && resource.url.trim()
-      ),
-      driveFolderUrl: form.driveFolderUrl,
-      checklist: buildChecklist(),
-      workSegments: form.type === "Alekey" ? form.workSegments : [],
-      totalHours:
-        form.type === "Alekey" && form.alekeyRole === "Trabajador"
-          ? form.totalHours || String(calculateHours(form.workSegments))
-          : "",
-      hourlyRate:
-        form.type === "Alekey" && form.alekeyRole === "Trabajador"
-          ? form.hourlyRate
-          : "",
-      hoursActive:
-        form.type === "Alekey" && form.alekeyRole === "Trabajador"
-          ? form.hoursActive ?? true
-          : true,
-      updatedAt: serverTimestamp(),
+      window.removeEventListener(
+        "keydown",
+        handleEscape
+      );
     };
+  }, [
+    mobileHeaderMenuOpen,
+  ]);
 
-    try {
-      if (editing) {
-        const taskRef = doc(db, "users", user.uid, "tasks", selectedTask.id);
+  /* =========================================================
+     COVERS
+  ========================================================= */
 
-        await setDoc(
-          taskRef,
-          {
-            ...taskData,
-            createdAt: selectedTask.createdAt || serverTimestamp(),
-          },
-          { merge: true }
-        );
+  const covers =
+    isMobileCover
+      ? MOBILE_COVERS
+      : DESKTOP_COVERS;
 
-        setSelectedTask({
-          ...selectedTask,
-          ...taskData,
-          id: selectedTask.id,
-        });
+  const getCover =
+    (task) =>
+      covers[
+        task.type
+      ] ||
+      covers.Tarea;
 
-        setShowModal(false);
-        setEditing(false);
-      } else {
-        const newTaskRef = doc(collection(db, "users", user.uid, "tasks"));
+  const isExpired =
+    isExpiredTask;
 
-        await setDoc(newTaskRef, {
-          ...taskData,
-          id: newTaskRef.id,
-          createdAt: serverTimestamp(),
-        });
+  /* =========================================================
+     NAVIGATION
+  ========================================================= */
 
-        setShowModal(false);
-      }
-
-      setErrors({});
-      setForm(emptyForm);
-      setOriginalForm(null);
-
-      showAlert({
-        type: "success",
-        title: editing ? "Cambios guardados" : "Actividad guardada",
-        message: "La información se guardó correctamente.",
-        confirmText: "Listo",
-        onlyConfirm: true,
-        onConfirm: closeAlert,
-      });
-    } catch {
-      showAlert({
-        type: "warning",
-        title: "Error al guardar",
-        message: "No se pudo guardar la actividad.",
-        confirmText: "Entendido",
-        onlyConfirm: true,
-        onConfirm: closeAlert,
-      });
-    }
-  };
-
-    const openEdit = (task) => {
-    const editForm = {
-      title: task.title,
-      type: task.type,
-      course: task.course || "Pensamiento Crítico",
-      alekeyRole: task.alekeyRole || "Encargado",
-      description: task.description,
-      date: task.date,
-      time: task.time,
-      priority: task.priority,
-      progressActive: task.progressActive ?? true,
-      hoursActive: task.hoursActive ?? true,
-      resources: task.resources?.length
-        ? task.resources
-        : [{ name: "", url: "", type: "PDF" }],
-      driveFolderUrl: task.driveFolderUrl || "",
-      checklist: task.checklist?.map((item) => item.text).join("\n") || "",
-      workSegments: task.workSegments?.length
-        ? task.workSegments
-        : [{ start: "", end: "" }],
-      totalHours: task.totalHours || "",
-      hourlyRate: task.hourlyRate || "1500",
-    };
-
-    setForm(editForm);
-    setOriginalForm(editForm);
-    setEditing(true);
-    setShowModal(true);
-    setErrors({});
-  };
-
-  const deleteTask = (id) => {
-    showAlert({
-      type: "danger",
-      title: "Eliminar actividad",
-      message:
-        "¿Seguro que quieres eliminarla? Esta acción no se puede deshacer.",
-      confirmText: "Sí, eliminar",
-      cancelText: "Cancelar",
-      onConfirm: async () => {
-        await deleteDoc(doc(db, "users", user.uid, "tasks", id));
-        setSelectedTask(null);
-        closeAlert();
-      },
-    });
-  };
-
-  const toggleChecklistItem = async (taskId, index) => {
-    const task = tasks.find((item) => item.id === taskId);
-    if (!task) return;
-
-    const updatedChecklist = task.checklist.map((item, i) =>
-      i === index ? { ...item, done: !item.done } : item
-    );
-
-    await updateDoc(doc(db, "users", user.uid, "tasks", taskId), {
-      checklist: updatedChecklist,
-      updatedAt: serverTimestamp(),
-    });
-
-    setSelectedTask((prev) =>
-      prev && prev.id === taskId
-        ? { ...prev, checklist: updatedChecklist }
-        : prev
-    );
-  };
-
-  const updateSegment = (index, field, value) => {
-    const updatedSegments = form.workSegments.map((segment, i) =>
-      i === index ? { ...segment, [field]: value } : segment
-    );
-
-    setForm({
-      ...form,
-      workSegments: updatedSegments,
-      totalHours: String(calculateHours(updatedSegments)),
-    });
-  };
-
-  const addSegment = () => {
-    if (form.workSegments.length >= 3) return;
-
-    setForm({
-      ...form,
-      workSegments: [...form.workSegments, { start: "", end: "" }],
-    });
-  };
-
-  const removeSegment = (index) => {
-    const updatedSegments = form.workSegments.filter((_, i) => i !== index);
-
-    setForm({
-      ...form,
-      workSegments: updatedSegments.length
-        ? updatedSegments
-        : [{ start: "", end: "" }],
-      totalHours: String(calculateHours(updatedSegments)),
-    });
-  };
-
-  const getPayment = (task) => {
-    const hours = Number(task.totalHours || 0);
-    const rate = Number(task.hourlyRate || 0);
-    return Number((hours * rate).toFixed(0));
-  };
-
-  const addResource = () => {
-    if (form.resources.length >= 3) return;
-
-    setForm({
-      ...form,
-      resources: [...form.resources, { name: "", url: "", type: "PDF" }],
-    });
-  };
-
-  const updateResource = (index, field, value) => {
-    setForm({
-      ...form,
-      resources: form.resources.map((resource, i) =>
-        i === index ? { ...resource, [field]: value } : resource
-      ),
-    });
-  };
-
-  const removeResource = (index) => {
-    setForm({
-      ...form,
-      resources: form.resources.filter((_, i) => i !== index),
-    });
-  };
-
-  const saveQuickNote = async () => {
-    await setDoc(
-      doc(db, "users", user.uid, "meta", "tools"),
-      {
-        quickNote: toolsData.quickNote || "",
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true }
-    );
-
-    showAlert({
-      type: "success",
-      title: "Nota guardada",
-      message: "Tu bloc de notas se guardó correctamente.",
-      confirmText: "Listo",
-      onlyConfirm: true,
-      onConfirm: closeAlert,
-    });
-  };
-
-  const calculateBasicResult = () => {
-    const a = Number(calcA);
-    const b = Number(calcB);
-
-    if (calcA === "" || calcB === "" || Number.isNaN(a) || Number.isNaN(b)) {
-      return "";
-    }
-
-    if (calcOperation === "+") return a + b;
-    if (calcOperation === "-") return a - b;
-    if (calcOperation === "×") return a * b;
-    if (calcOperation === "÷") return b === 0 ? "No válido" : a / b;
-
-    return "";
-  };
-
-  const clearCalculator = () => {
-    setCalcA("");
-    setCalcB("");
-    setCalcOperation("+");
-  };
-
-  const addClientProduct = () => {
-    setClientForm({
-      ...clientForm,
-      products: [...clientForm.products, { name: "", price: "" }],
-    });
-  };
-
-  const updateClientProduct = (index, field, value) => {
-    setClientForm({
-      ...clientForm,
-      products: clientForm.products.map((product, i) =>
-        i === index ? { ...product, [field]: value } : product
-      ),
-    });
-  };
-
-  const removeClientProduct = (index) => {
-    setClientForm({
-      ...clientForm,
-      products:
-        clientForm.products.length > 1
-          ? clientForm.products.filter((_, i) => i !== index)
-          : [{ name: "", price: "" }],
-    });
-  };
-
-  const saveClient = async () => {
-    const newErrors = {};
-
-    if (!clientForm.name.trim()) {
-      newErrors.name = "Agrega el nombre de la persona.";
-    }
-
-    setClientErrors(newErrors);
-    if (Object.keys(newErrors).length > 0) return;
-
-    const cleanedProducts = clientForm.products.filter(
-      (product) => product.name.trim() || product.price.trim()
-    );
-
-    if (editingClient) {
-      await updateDoc(doc(db, "users", user.uid, "clients", editingClient), {
-        ...clientForm,
-        products: cleanedProducts,
-        total: calculateClientTotal(cleanedProducts),
-        updatedAt: serverTimestamp(),
-      });
-    } else {
-      const clientRef = doc(collection(db, "users", user.uid, "clients"));
-
-      await setDoc(clientRef, {
-        ...clientForm,
-        products: cleanedProducts,
-        total: calculateClientTotal(cleanedProducts),
-        id: clientRef.id,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-    }
-
-    setEditingClient(null);
-    setClientForm(emptyClientForm);
-    setShowClientModal(false);
-  };
-
-  const toggleClientPaid = async (client) => {
-    await updateDoc(doc(db, "users", user.uid, "clients", client.id), {
-      paid: !client.paid,
-      updatedAt: serverTimestamp(),
-    });
-  };
-
-  const deleteClient = async (id) => {
-    showAlert({
-      type: "danger",
-      title: "Eliminar cliente",
-      message: "¿Seguro que quieres eliminar este cliente?",
-      confirmText: "Sí, eliminar",
-      cancelText: "Cancelar",
-      onConfirm: async () => {
-        await deleteDoc(doc(db, "users", user.uid, "clients", id));
-        closeAlert();
-      },
-    });
-  };
-
-  const unlockAccountsSession = () => {
-    const endTime = Date.now() + UNLOCK_TIME;
-
-    setAccountsUnlocked(true);
-    setAccountsUnlockEnd(endTime);
-    setUnlockSecondsLeft(Math.ceil(UNLOCK_TIME / 1000));
-    setMasterInput("");
-
-    localStorage.setItem(`remora_accounts_unlock_${user.uid}`, String(endTime));
-  };
-
-  const unlockAccounts = () => {
-    if (masterInput === MASTER_PASSWORD) {
-      unlockAccountsSession();
-      return;
-    }
-
-    showAlert({
-      type: "warning",
-      title: "Contraseña incorrecta",
-      message: "No se pudo desbloquear la sección de cuentas.",
-      confirmText: "Entendido",
-      onlyConfirm: true,
-      onConfirm: closeAlert,
-    });
-  };
-
-  const registerPasskeyForAccounts = async () => {
-    try {
-      const credentialId = await registerPasskey(user);
-
-      await setDoc(
-        doc(db, "users", user.uid, "meta", "security"),
-        {
-          passkeyCredentialId: credentialId,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
+  const goToView =
+    (nextView) => {
+      setMobileHeaderMenuOpen(
+        false
       );
 
-      showAlert({
-        type: "success",
-        title: "Passkey registrada",
-        message:
-          "Ahora puedes desbloquear Cuentas con huella, rostro o PIN del dispositivo.",
-        confirmText: "Listo",
-        onlyConfirm: true,
-        onConfirm: closeAlert,
+      setView(
+        nextView
+      );
+
+      setSelectedTool(
+        null
+      );
+
+      taskWorkspace.setHistoryOpen(
+        false
+      );
+
+      window.setTimeout(
+        () =>
+          window.scrollTo({
+            top: 0,
+
+            behavior:
+              "smooth",
+          }),
+        40
+      );
+    };
+
+  const openSettings =
+    () => {
+      setMobileHeaderMenuOpen(
+        false
+      );
+
+      setPreviousView(
+        view ===
+          "Ajustes"
+          ? "Inicio"
+          : view
+      );
+
+      setView(
+        "Ajustes"
+      );
+
+      setSelectedTool(
+        null
+      );
+
+      window.scrollTo({
+        top: 0,
+
+        behavior:
+          "smooth",
       });
-    } catch (error) {
-      showAlert({
-        type: "warning",
-        title: "No se pudo registrar",
-        message: error.message,
-        confirmText: "Entendido",
-        onlyConfirm: true,
-        onConfirm: closeAlert,
-      });
-    }
-  };
+    };
 
-  const unlockAccountsWithPasskey = async () => {
-    try {
-      if (!securityData.passkeyCredentialId) {
-        throw new Error("Primero registra una Passkey.");
-      }
+  /* =========================================================
+     LOGOUT
+  ========================================================= */
 
-      await unlockWithPasskey(securityData.passkeyCredentialId);
-      unlockAccountsSession();
-    } catch (error) {
-      showAlert({
-        type: "warning",
-        title: "No se pudo desbloquear",
-        message: error.message,
-        confirmText: "Entendido",
-        onlyConfirm: true,
-        onConfirm: closeAlert,
-      });
-    }
-  };
+  const handleLogout =
+    async () => {
+      setMobileHeaderMenuOpen(
+        false
+      );
 
-    const saveAccount = async () => {
-    const newErrors = {};
+      accountVault.lockAccounts();
 
-    if (!accountForm.title.trim()) {
-      newErrors.title = "Agrega un título.";
-    }
+      taskWorkspace.setSelectedTask(
+        null
+      );
 
-    setAccountErrors(newErrors);
-    if (Object.keys(newErrors).length > 0) return;
+      setSearchOpen(
+        false
+      );
 
-    const accountRef = doc(collection(db, "users", user.uid, "accounts"));
+      await logout();
+    };
 
-    await setDoc(accountRef, {
-      ...accountForm,
-      id: accountRef.id,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-
-    setAccountForm(emptyAccountForm);
-    setShowAccountModal(false);
-  };
-
-  const deleteAccount = async (id) => {
-    showAlert({
-      type: "danger",
-      title: "Eliminar cuenta",
-      message:
-        "¿Seguro que quieres eliminar esta cuenta? Esta acción no se puede deshacer.",
-      confirmText: "Sí, eliminar",
-      cancelText: "Cancelar",
-      onConfirm: async () => {
-        await deleteDoc(doc(db, "users", user.uid, "accounts", id));
-        closeAlert();
-      },
-    });
-  };
-
-  const handleEyeClick = async (accountId) => {
-    if (visibleAccountId === accountId) {
-      setVisibleAccountId(null);
-      return;
-    }
-
-    if (mobilePasskeyAvailable && securityData.passkeyCredentialId) {
-      try {
-        await unlockWithPasskey(securityData.passkeyCredentialId);
-        setVisibleAccountId(accountId);
-      } catch {
-        showAlert({
-          type: "warning",
-          title: "No se pudo verificar",
-          message: "No se pudo mostrar la información protegida.",
-          confirmText: "Entendido",
-          onlyConfirm: true,
-          onConfirm: closeAlert,
-        });
-      }
-
-      return;
-    }
-
-    setPasswordInput("");
-
-    showAlert({
-      type: "password",
-      title: "Ver cuenta",
-      message: "Introduce la contraseña maestra para ver la información.",
-      confirmText: "Ver cuenta",
-      cancelText: "Cancelar",
-      accountId,
-      onConfirm: null,
-    });
-  };
+  /* =========================================================
+     CALCULATOR
+  ========================================================= */
 
   const gradeResult =
-    gradeScore && gradeTotal
-      ? ((Number(gradeScore) / Number(gradeTotal)) * 100).toFixed(2)
+    gradeScore &&
+    gradeTotal
+      ? (
+          (
+            Number(
+              gradeScore
+            ) /
+            Number(
+              gradeTotal
+            )
+          ) *
+          100
+        ).toFixed(2)
       : "";
 
-  const categoryStats = [
-    "Universidad",
-    "Trabajo",
-    "Tarea",
-    "Recordatorio",
-    "Alekey",
-  ].map((category) => ({
-    category,
-    count: tasks.filter((task) => task.type === category).length,
-  }));
+  const calculateBasicResult =
+    () => {
+      const a =
+        Number(
+          calcA
+        );
 
-  const weeklyStats = useMemo(() => {
-    const today = new Date(getTodayDate());
+      const b =
+        Number(
+          calcB
+        );
 
-    return Array.from({ length: 7 }).map((_, index) => {
-      const date = new Date(today);
-      date.setDate(today.getDate() + index);
-      const key = date.toISOString().split("T")[0];
+      if (
+        calcA === "" ||
+        calcB === "" ||
+        Number.isNaN(a) ||
+        Number.isNaN(b)
+      ) {
+        return "";
+      }
 
-      return {
-        label: date.toLocaleDateString("es-CR", { weekday: "short" }),
-        count: tasks.filter((task) => task.date === key).length,
-      };
-    });
-  }, [tasks]);
+      if (
+        calcOperation ===
+        "+"
+      ) {
+        return a + b;
+      }
 
-  const maxWeekly = Math.max(...weeklyStats.map((item) => item.count), 1);
+      if (
+        calcOperation ===
+        "-"
+      ) {
+        return a - b;
+      }
 
-  const totalAlekeyHours = tasks.reduce((sum, task) => {
-    if (task.type !== "Alekey") return sum;
-    if (task.alekeyRole !== "Trabajador") return sum;
-    if (task.hoursActive === false) return sum;
+      if (
+        calcOperation ===
+        "×"
+      ) {
+        return a * b;
+      }
 
-    return sum + Number(task.totalHours || 0);
-  }, 0);
+      if (
+        calcOperation ===
+        "÷"
+      ) {
+        return b === 0
+          ? "No válido"
+          : a / b;
+      }
 
-  const pendingClients = clients.filter((client) => !client.paid);
-  const pendingClientsTotal = pendingClients.reduce(
-    (sum, client) =>
-      sum + Number(client.total || calculateClientTotal(client.products)),
-    0
-  );
+      return "";
+    };
 
-  const alekeySalaryTotal = totalAlekeyHours * HOURLY_RATE;
+  /* =========================================================
+     DASHBOARD SETTINGS
+  ========================================================= */
 
+  const openDashboardSettings =
+    () => {
+      setDashboardDraft(
+        preferences.dashboardCards ||
+          DEFAULT_PREFERENCES.dashboardCards
+      );
 
-  const toggleTaskProgress = async (task) => {
-    const newValue = task.progressActive === false ? true : false;
-    await updateDoc(doc(db, "users", user.uid, "tasks", task.id), { progressActive: newValue, updatedAt: serverTimestamp() });
-    setSelectedTask({ ...task, progressActive: newValue });
-  };
+      setShowDashboardSettings(
+        true
+      );
+    };
 
-  const toggleTaskHours = async (task) => {
-    const newValue = task.hoursActive === false ? true : false;
-    await updateDoc(doc(db, "users", user.uid, "tasks", task.id), { hoursActive: newValue, updatedAt: serverTimestamp() });
-    setSelectedTask({ ...task, hoursActive: newValue });
-  };
+  const saveDashboardSettings =
+    async () => {
+      await savePreferences({
+        dashboardCards:
+          dashboardDraft,
+      });
 
-  const openEditClient = (client) => {
-    setEditingClient(client.id);
-    setClientForm({ name: client.name || "", products: client.products?.length > 0 ? client.products : [{ name: "", price: "" }], paid: client.paid || false });
-    setClientErrors({});
-    setShowClientModal(true);
-  };
+      setShowDashboardSettings(
+        false
+      );
+    };
+
+  /* =========================================================
+     NOTIFICATIONS
+  ========================================================= */
+
+  const enableNotifications =
+    async () => {
+      try {
+        await requestNotificationPermission(
+          user,
+          preferences
+        );
+
+        await savePreferences({
+          notificationsEnabled:
+            true,
+        });
+
+        showAlert({
+          type:
+            "success",
+
+          title:
+            "Notificaciones activadas",
+
+          message:
+            "Este dispositivo ya está listo. Para el envío automático en segundo plano debes desplegar la Firebase Function incluida en el proyecto.",
+
+          confirmText:
+            "Listo",
+
+          onlyConfirm:
+            true,
+
+          onConfirm:
+            closeAlert,
+        });
+      } catch (
+        error
+      ) {
+        showAlert({
+          type:
+            "warning",
+
+          title:
+            "No se pudieron activar",
+
+          message:
+            error.message,
+
+          confirmText:
+            "Entendido",
+
+          onlyConfirm:
+            true,
+
+          onConfirm:
+            closeAlert,
+        });
+      }
+    };
+
+  /* =========================================================
+     BACKUP
+  ========================================================= */
+
+  const exportBackup =
+    async () => {
+      setBackupBusy(
+        true
+      );
+
+      try {
+        await downloadBackup(
+          user
+        );
+      } catch (
+        error
+      ) {
+        showAlert({
+          type:
+            "warning",
+
+          title:
+            "No se pudo exportar",
+
+          message:
+            error.message,
+
+          confirmText:
+            "Entendido",
+
+          onlyConfirm:
+            true,
+
+          onConfirm:
+            closeAlert,
+        });
+      } finally {
+        setBackupBusy(
+          false
+        );
+      }
+    };
+
+  const importBackup =
+    (file) => {
+      showAlert({
+        type:
+          "warning",
+
+        title:
+          "Importar copia de seguridad",
+
+        message:
+          "La copia se combinará con tus datos actuales. Los documentos con el mismo ID se actualizarán.",
+
+        confirmText:
+          "Importar",
+
+        cancelText:
+          "Cancelar",
+
+        onConfirm:
+          async () => {
+            closeAlert();
+
+            setBackupBusy(
+              true
+            );
+
+            try {
+              await importBackupFile(
+                user,
+                file
+              );
+
+              accountVault.lockAccounts();
+
+              showAlert({
+                type:
+                  "success",
+
+                title:
+                  "Copia importada",
+
+                message:
+                  "Los datos fueron restaurados. Si la copia incluía una bóveda diferente, usa la contraseña de esa copia para abrir Cuentas.",
+
+                confirmText:
+                  "Listo",
+
+                onlyConfirm:
+                  true,
+
+                onConfirm:
+                  closeAlert,
+              });
+            } catch (
+              error
+            ) {
+              showAlert({
+                type:
+                  "warning",
+
+                title:
+                  "No se pudo importar",
+
+                message:
+                  error.message,
+
+                confirmText:
+                  "Entendido",
+
+                onlyConfirm:
+                  true,
+
+                onConfirm:
+                  closeAlert,
+              });
+            } finally {
+              setBackupBusy(
+                false
+              );
+            }
+          },
+      });
+    };
+
+  /* =========================================================
+     GLOBAL SEARCH
+  ========================================================= */
+
+  const closeGlobalSearch =
+    () => {
+      setSearchOpen(
+        false
+      );
+
+      setGlobalSearch(
+        ""
+      );
+    };
+
+  const openTaskFromSearch =
+    (task) => {
+      closeGlobalSearch();
+
+      setView(
+        "Inicio"
+      );
+
+      taskWorkspace.setHistoryOpen(
+        Boolean(
+          task.completed ||
+            task.archived
+        )
+      );
+
+      taskWorkspace.setSelectedTask(
+        task
+      );
+    };
+
+  const openNoteFromSearch =
+    (note) => {
+      closeGlobalSearch();
+
+      setView(
+        "Herramientas"
+      );
+
+      setSelectedTool(
+        "notes"
+      );
+
+      notesWorkspace.openView(
+        note
+      );
+    };
+
+  const openClientFromSearch =
+    (client) => {
+      closeGlobalSearch();
+
+      setView(
+        "Herramientas"
+      );
+
+      setSelectedTool(
+        "clients"
+      );
+
+      clientsWorkspace.openEdit(
+        client
+      );
+    };
+
+  const openAccountFromSearch =
+    (account) => {
+      closeGlobalSearch();
+
+      setView(
+        "Cuentas"
+      );
+
+      accountVault.setVisibleAccountId(
+        account.id
+      );
+    };
+
+  /* =========================================================
+     AUTH LOADING
+  ========================================================= */
 
   if (authLoading) {
-    return <div className="auth-page"><div className="auth-card"><img src={icono} alt="Remora" className="auth-logo" /><h1>Remora</h1><p>Cargando...</p></div></div>;
+    return (
+      <div className="auth-page">
+        <div className="auth-card">
+          <img
+            src={
+              icono
+            }
+            alt="Remora"
+            className="auth-logo"
+          />
+
+          <h1>
+            Remora
+          </h1>
+
+          <p>
+            Cargando...
+          </p>
+        </div>
+      </div>
+    );
   }
+
+  /* =========================================================
+     LOGIN
+  ========================================================= */
 
   if (!user) {
-    return <div className="auth-page"><div className="auth-card"><img src={icono} alt="Remora" className="auth-logo" /><h1>Remora</h1><p>Que nada te detenga.</p><button className="google-login-btn" onClick={handleLogin}>Continuar con Google</button></div></div>;
+    return (
+      <div className="auth-page">
+        <div className="auth-card">
+          <img
+            src={
+              icono
+            }
+            alt="Remora"
+            className="auth-logo"
+          />
+
+          <h1>
+            Remora
+          </h1>
+
+          <p>
+            Que nada te detenga.
+          </p>
+
+          <button
+            className="google-login-btn"
+            onClick={
+              login
+            }
+          >
+            Continuar con Google
+          </button>
+        </div>
+      </div>
+    );
   }
 
-  return <div className="app">
-    <header className="header"><div className="header-top"><div className="brand"><img src={icono} alt="Remora" className="brand-icon" /><div><h1>Remora</h1><p>Que nada te detenga.</p></div></div><div className="user-profile"><img src={user?.photoURL || "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"} alt={user?.displayName || "Usuario"} referrerPolicy="no-referrer" /><div className="user-info"><strong>{user?.displayName || "Usuario"}</strong><button onClick={handleLogout}><LogOut size={16} />Salir</button></div></div></div></header>
+  /* =========================================================
+     APP
+  ========================================================= */
 
-    <main className="content">
-      {view === "Inicio" && <HomePage filter={filter} setFilter={setFilter} setPage={setPage} tasksLoading={tasksLoading} visibleTasks={visibleTasks} expiredTasks={expiredTasks} groupedVisibleTasks={groupedVisibleTasks} groupedExpiredTasks={groupedExpiredTasks} showExpired={showExpired} setShowExpired={setShowExpired} totalPages={totalPages} page={page} getCover={getCover} isExpired={isExpired} setSelectedTask={setSelectedTask} />}
-      {view === "Herramientas" && <ToolsPage selectedTool={selectedTool} setSelectedTool={setSelectedTool} calcA={calcA} setCalcA={setCalcA} calcB={calcB} setCalcB={setCalcB} calcOperation={calcOperation} setCalcOperation={setCalcOperation} calculateBasicResult={calculateBasicResult} clearCalculator={clearCalculator} gradeScore={gradeScore} setGradeScore={setGradeScore} gradeTotal={gradeTotal} setGradeTotal={setGradeTotal} gradeResult={gradeResult} noteSearch={noteSearch} setNoteSearch={setNoteSearch} notePage={notePage} setNotePage={setNotePage} notesReorderMode={notesReorderMode} setNotesReorderMode={setNotesReorderMode} openCreateNote={openCreateNote} notes={notes} sensors={sensors} handleNoteDragEnd={handleNoteDragEnd} visibleNotes={visibleNotes} totalNotePages={totalNotePages} noteMenuId={noteMenuId} setNoteMenuId={setNoteMenuId} openViewNote={openViewNote} toggleNotePinned={toggleNotePinned} deleteNote={deleteNote} openEditNote={openEditNote} clients={clients} toggleClientPaid={toggleClientPaid} openEditClient={openEditClient} deleteClient={deleteClient} setShowClientModal={setShowClientModal} />}
-      {view === "Progreso" && <ProgressPage weeklyStats={weeklyStats} maxWeekly={maxWeekly} categoryStats={categoryStats} activeTasks={activeTasks} pendingClients={pendingClients} pendingClientsTotal={pendingClientsTotal} totalAlekeyHours={totalAlekeyHours} alekeySalaryTotal={alekeySalaryTotal} />}
-      {view === "Cuentas" && <AccountsPage accountsUnlocked={accountsUnlocked} mobilePasskeyAvailable={mobilePasskeyAvailable} securityData={securityData} masterInput={masterInput} setMasterInput={setMasterInput} unlockAccounts={unlockAccounts} unlockAccountsWithPasskey={unlockAccountsWithPasskey} registerPasskeyForAccounts={registerPasskeyForAccounts} unlockSecondsLeft={unlockSecondsLeft} setShowAccountModal={setShowAccountModal} accounts={accounts} visibleAccountId={visibleAccountId} handleEyeClick={handleEyeClick} deleteAccount={deleteAccount} />}
-    </main>
+  return (
+    <div className="app">
+      {!online && (
+        <div className="offline-banner">
+          Sin conexión · Remora está usando la información disponible offline.
+        </div>
+      )}
 
-    {view === "Inicio" && <button className="fab" onClick={() => { setEditing(false); setOriginalForm(null); setForm(emptyForm); setErrors({}); setShowModal(true); }}><Plus size={38} strokeWidth={4} /></button>}
-    <BottomNavigation goToView={goToView} />
+      {/* =====================================================
+          HEADER DESKTOP
+      ===================================================== */}
 
-    <AnimatePresence>
-      <TaskDetail task={selectedTask} showForm={showModal} getCover={getCover} isExpired={isExpired} getPayment={getPayment} onClose={() => setSelectedTask(null)} onToggleProgress={toggleTaskProgress} onToggleHours={toggleTaskHours} onToggleChecklist={toggleChecklistItem} onEdit={openEdit} onDelete={deleteTask} />
-      <NoteEditor show={showNoteModal} closeNoteModal={closeNoteModal} noteForm={noteForm} setNoteForm={setNoteForm} noteMode={noteMode} selectedNote={selectedNote} noteErrors={noteErrors} formatNoteDate={formatNoteDate} toggleChecklistItemInNote={toggleChecklistItemInNote} openEditNote={openEditNote} toggleNotePinned={toggleNotePinned} deleteNote={deleteNote} addNoteTextBlock={addNoteTextBlock} addNoteChecklistBlock={addNoteChecklistBlock} addNotePendingBlock={addNotePendingBlock} removeNoteBlock={removeNoteBlock} updateNoteBlock={updateNoteBlock} updateChecklistItem={updateChecklistItem} addChecklistItem={addChecklistItem} saveNote={saveNote} />
-      <TaskModal show={showModal} closeForm={closeForm} editing={editing} form={form} setForm={setForm} errors={errors} updateSegment={updateSegment} removeSegment={removeSegment} addSegment={addSegment} updateResource={updateResource} removeResource={removeResource} addResource={addResource} saveTask={saveTask} />
-      <AccountModal show={showAccountModal} onClose={() => setShowAccountModal(false)} accountForm={accountForm} setAccountForm={setAccountForm} accountErrors={accountErrors} saveAccount={saveAccount} />
-      <ClientModal show={showClientModal} onClose={() => setShowClientModal(false)} editingClient={editingClient} clientForm={clientForm} setClientForm={setClientForm} clientErrors={clientErrors} updateClientProduct={updateClientProduct} removeClientProduct={removeClientProduct} addClientProduct={addClientProduct} saveClient={saveClient} />
-      <ConfirmDialog alertData={alertData} passwordInput={passwordInput} setPasswordInput={setPasswordInput} setVisibleAccountId={setVisibleAccountId} closeAlert={closeAlert} showAlert={showAlert} />
-    </AnimatePresence>
-  </div>;
+      <header className="header">
+        <div className="header-top">
+          <div className="brand">
+            <img
+              src={
+                icono
+              }
+              alt="Remora"
+              className="brand-icon"
+            />
+
+            <div>
+              <h1>
+                Remora
+              </h1>
+
+              <p>
+                Que nada te detenga.
+              </p>
+            </div>
+          </div>
+
+          <div className="header-desktop-actions">
+            <div className="header-action-stack">
+              <button
+                type="button"
+                className="header-square-action"
+                onClick={() =>
+                  setSearchOpen(
+                    true
+                  )
+                }
+                title="Buscar (Ctrl + K)"
+                aria-label="Buscar"
+              >
+                <Search
+                  size={19}
+                />
+              </button>
+
+              <button
+                type="button"
+                className="header-square-action"
+                onClick={
+                  openSettings
+                }
+                title="Ajustes"
+                aria-label="Ajustes"
+              >
+                <Settings
+                  size={19}
+                />
+              </button>
+            </div>
+
+            <div className="user-profile header-user-profile">
+              <img
+                src={
+                  user.photoURL ||
+                  "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
+                }
+                alt={
+                  user.displayName ||
+                  "Usuario"
+                }
+                referrerPolicy="no-referrer"
+              />
+
+              <div className="user-info">
+                <strong>
+                  {user.displayName ||
+                    "Usuario"}
+                </strong>
+
+                <button
+                  type="button"
+                  onClick={
+                    handleLogout
+                  }
+                >
+                  <LogOut
+                    size={16}
+                  />
+
+                  Salir
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* =====================================================
+          HEADER MENU MOBILE
+      ===================================================== */}
+
+      <div
+        className="mobile-header-menu"
+        ref={
+          mobileHeaderMenuRef
+        }
+      >
+        <button
+          type="button"
+          className={`mobile-header-menu-trigger ${
+            mobileHeaderMenuOpen
+              ? "open"
+              : ""
+          }`}
+          onClick={() =>
+            setMobileHeaderMenuOpen(
+              (
+                current
+              ) =>
+                !current
+            )
+          }
+          aria-label={
+            mobileHeaderMenuOpen
+              ? "Cerrar menú"
+              : "Abrir menú"
+          }
+          aria-expanded={
+            mobileHeaderMenuOpen
+          }
+        >
+          {mobileHeaderMenuOpen ? (
+            <X
+              size={21}
+            />
+          ) : (
+            <MoreHorizontal
+              size={23}
+            />
+          )}
+        </button>
+
+        {mobileHeaderMenuOpen && (
+          <div className="mobile-header-menu-panel">
+            <button
+              type="button"
+              className="mobile-header-menu-option"
+              onClick={() => {
+                setMobileHeaderMenuOpen(
+                  false
+                );
+
+                setSearchOpen(
+                  true
+                );
+              }}
+            >
+              <span className="mobile-header-menu-icon">
+                <Search
+                  size={19}
+                />
+              </span>
+
+              <span>
+                Buscar
+              </span>
+            </button>
+
+            <button
+              type="button"
+              className="mobile-header-menu-option mobile-header-account-option"
+              onClick={
+                handleLogout
+              }
+            >
+              <span className="mobile-header-account-photo">
+                <img
+                  src={
+                    user.photoURL ||
+                    "https://cdn-icons-png.flaticon.com/512/3135/3135715.png"
+                  }
+                  alt=""
+                  referrerPolicy="no-referrer"
+                />
+              </span>
+
+              <span className="mobile-header-account-copy">
+                <strong>
+                  {user.displayName ||
+                    "Usuario"}
+                </strong>
+
+                <small>
+                  Salir
+                </small>
+              </span>
+
+              <LogOut
+                className="mobile-header-logout-icon"
+                size={17}
+              />
+            </button>
+
+            <button
+              type="button"
+              className="mobile-header-menu-option"
+              onClick={
+                openSettings
+              }
+            >
+              <span className="mobile-header-menu-icon">
+                <Settings
+                  size={19}
+                />
+              </span>
+
+              <span>
+                Ajustes
+              </span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* =====================================================
+          CONTENT
+      ===================================================== */}
+
+      <main className="content">
+        {view ===
+          "Inicio" && (
+          <HomePage
+            filter={
+              taskWorkspace.filter
+            }
+            setFilter={
+              taskWorkspace.setFilter
+            }
+            setPage={
+              taskWorkspace.setPage
+            }
+            tasksLoading={
+              taskStore.tasksLoading
+            }
+            visibleTasks={
+              taskWorkspace.visibleTasks
+            }
+            expiredTasks={
+              taskWorkspace.expiredTasks
+            }
+            groupedVisibleTasks={
+              taskWorkspace.groupedVisibleTasks
+            }
+            groupedExpiredTasks={
+              taskWorkspace.groupedExpiredTasks
+            }
+            showExpired={
+              taskWorkspace.showExpired
+            }
+            setShowExpired={
+              taskWorkspace.setShowExpired
+            }
+            totalPages={
+              taskWorkspace.totalPages
+            }
+            page={
+              taskWorkspace.page
+            }
+            getCover={
+              getCover
+            }
+            isExpired={
+              isExpired
+            }
+            setSelectedTask={
+              taskWorkspace.setSelectedTask
+            }
+            allTasks={
+              taskStore.tasks
+            }
+            dashboardCards={
+              preferences.dashboardCards ||
+              DEFAULT_PREFERENCES.dashboardCards
+            }
+            onOpenDashboardSettings={
+              openDashboardSettings
+            }
+            homeScope={
+              taskWorkspace.homeScope
+            }
+            setHomeScope={
+              taskWorkspace.setHomeScope
+            }
+            historyOpen={
+              taskWorkspace.historyOpen
+            }
+            setHistoryOpen={
+              taskWorkspace.setHistoryOpen
+            }
+            historyTasks={
+              taskWorkspace.historyTasks
+            }
+          />
+        )}
+
+        {view ===
+          "Herramientas" && (
+          <ToolsPage
+            selectedTool={
+              selectedTool
+            }
+            setSelectedTool={
+              setSelectedTool
+            }
+
+            calcA={
+              calcA
+            }
+            setCalcA={
+              setCalcA
+            }
+
+            calcB={
+              calcB
+            }
+            setCalcB={
+              setCalcB
+            }
+
+            calcOperation={
+              calcOperation
+            }
+            setCalcOperation={
+              setCalcOperation
+            }
+
+            calculateBasicResult={
+              calculateBasicResult
+            }
+
+            clearCalculator={() => {
+              setCalcA(
+                ""
+              );
+
+              setCalcB(
+                ""
+              );
+
+              setCalcOperation(
+                "+"
+              );
+            }}
+
+            gradeScore={
+              gradeScore
+            }
+            setGradeScore={
+              setGradeScore
+            }
+
+            gradeTotal={
+              gradeTotal
+            }
+            setGradeTotal={
+              setGradeTotal
+            }
+
+            gradeResult={
+              gradeResult
+            }
+
+            noteSearch={
+              notesWorkspace.search
+            }
+            setNoteSearch={
+              notesWorkspace.setSearch
+            }
+
+            notePage={
+              notesWorkspace.page
+            }
+            setNotePage={
+              notesWorkspace.setPage
+            }
+
+            notesReorderMode={
+              notesWorkspace.reorderMode
+            }
+            setNotesReorderMode={
+              notesWorkspace.setReorderMode
+            }
+
+            openCreateNote={
+              notesWorkspace.openCreate
+            }
+
+            notes={
+              notesStore.notes
+            }
+
+            sensors={
+              sensors
+            }
+
+            handleNoteDragEnd={
+              notesWorkspace.handleDragEnd
+            }
+
+            visibleNotes={
+              notesWorkspace.visibleNotes
+            }
+
+            totalNotePages={
+              notesWorkspace.totalPages
+            }
+
+            noteMenuId={
+              notesWorkspace.menuId
+            }
+            setNoteMenuId={
+              notesWorkspace.setMenuId
+            }
+
+            openViewNote={
+              notesWorkspace.openView
+            }
+
+            toggleNotePinned={
+              notesWorkspace.togglePinned
+            }
+
+            deleteNote={
+              notesWorkspace.remove
+            }
+
+            openEditNote={
+              notesWorkspace.openEdit
+            }
+
+            clients={
+              clients
+            }
+
+            toggleClientPaid={
+              clientsWorkspace.togglePaid
+            }
+
+            openEditClient={
+              clientsWorkspace.openEdit
+            }
+
+            deleteClient={
+              clientsWorkspace.remove
+            }
+
+            setShowClientModal={
+              (open) =>
+                open
+                  ? clientsWorkspace.openCreate()
+                  : clientsWorkspace.closeModal()
+            }
+          />
+        )}
+
+        {view ===
+          "Progreso" && (
+          <ProgressPage
+            tasks={
+              taskStore.tasks
+            }
+
+            clients={
+              clients
+            }
+
+            range={
+              preferences.progressRange ||
+              "week"
+            }
+
+            onRangeChange={
+              (
+                progressRange
+              ) =>
+                savePreferences({
+                  progressRange,
+                })
+            }
+
+            onDeleteTask={
+              taskStore.removeTask
+            }
+
+            showAlert={
+              showAlert
+            }
+
+            closeAlert={
+              closeAlert
+            }
+          />
+        )}
+
+        {view ===
+          "Cuentas" && (
+          <AccountsPage
+            accountsUnlocked={
+              security.accountsUnlocked
+            }
+
+            securityLoading={
+              securityLoading
+            }
+
+            accountsLoading={
+              accountsLoading
+            }
+
+            hasPassword={
+              security.hasPassword
+            }
+
+            passkeyAvailable={
+              security.passkeyAvailable
+            }
+
+            hasPasskey={
+              security.hasPasskey
+            }
+
+            masterInput={
+              accountVault.masterInput
+            }
+
+            setMasterInput={
+              accountVault.setMasterInput
+            }
+
+            newMasterPassword={
+              accountVault.newMasterPassword
+            }
+
+            setNewMasterPassword={
+              accountVault.setNewMasterPassword
+            }
+
+            confirmMasterPassword={
+              accountVault.confirmMasterPassword
+            }
+
+            setConfirmMasterPassword={
+              accountVault.setConfirmMasterPassword
+            }
+
+            recoveryCode={
+              accountVault.recoveryCode
+            }
+
+            setRecoveryCode={
+              accountVault.setRecoveryCode
+            }
+
+            passwordResetAuthorized={
+              security.passwordResetAuthorized
+            }
+
+            securityBusy={
+              security.securityBusy
+            }
+
+            unlockAccounts={
+              accountVault.unlockAccounts
+            }
+
+            unlockAccountsWithPasskey={
+              accountVault.unlockAccountsWithPasskey
+            }
+
+            createInitialPassword={
+              accountVault.createInitialPassword
+            }
+
+            beginForgotPassword={
+              accountVault.beginForgotPassword
+            }
+
+            resetForgottenPassword={
+              accountVault.resetForgottenPassword
+            }
+
+            cancelPasswordReset={() => {
+              security.cancelPasswordReset();
+
+              accountVault.clearSecurityInputs();
+            }}
+
+            registerPasskeyForAccounts={
+              accountVault.registerPasskeyForAccounts
+            }
+
+            lockAccounts={
+              accountVault.lockAccounts
+            }
+
+            unlockSecondsLeft={
+              security.unlockSecondsLeft
+            }
+
+            setShowAccountModal={
+              accountVault.setShowModal
+            }
+
+            accounts={
+              accounts
+            }
+
+            visibleAccountId={
+              accountVault.visibleAccountId
+            }
+
+            handleEyeClick={
+              accountVault.toggleVisible
+            }
+
+            deleteAccount={
+              accountVault.remove
+            }
+          />
+        )}
+
+        {view ===
+          "Ajustes" && (
+          <SettingsPage
+            onBack={() =>
+              setView(
+                previousView ||
+                "Inicio"
+              )
+            }
+
+            preferences={
+              preferences
+            }
+
+            savePreferences={
+              savePreferences
+            }
+
+            notificationsSupported={
+              notificationSupported()
+            }
+
+            onEnableNotifications={
+              enableNotifications
+            }
+
+            onExportBackup={
+              exportBackup
+            }
+
+            onImportBackup={
+              importBackup
+            }
+
+            backupBusy={
+              backupBusy
+            }
+
+            online={
+              online
+            }
+
+            canInstall={
+              canInstall
+            }
+
+            installed={
+              installed
+            }
+
+            onInstall={
+              install
+            }
+          />
+        )}
+      </main>
+
+      {/* =====================================================
+          FAB
+      ===================================================== */}
+
+      {view ===
+        "Inicio" &&
+        !taskWorkspace.historyOpen && (
+        <button
+          className="fab"
+          onClick={
+            taskWorkspace.openCreate
+          }
+        >
+          <Plus
+            size={38}
+            strokeWidth={4}
+          />
+        </button>
+      )}
+
+      {/* =====================================================
+          BOTTOM NAV
+      ===================================================== */}
+
+      {view !==
+        "Ajustes" && (
+        <BottomNavigation
+          view={
+            view
+          }
+
+          goToView={
+            goToView
+          }
+        />
+      )}
+
+      {/* =====================================================
+          MODALS
+      ===================================================== */}
+
+      <AnimatePresence>
+        <TaskDetail
+          task={
+            taskWorkspace.selectedTask
+          }
+
+          showForm={
+            taskWorkspace.showModal
+          }
+
+          getCover={
+            getCover
+          }
+
+          isExpired={
+            isExpired
+          }
+
+          getPayment={
+            taskWorkspace.getPayment
+          }
+
+          onClose={() =>
+            taskWorkspace.setSelectedTask(
+              null
+            )
+          }
+
+          onToggleProgress={
+            taskWorkspace.handleToggleProgress
+          }
+
+          onToggleHours={
+            taskWorkspace.handleToggleHours
+          }
+
+          onToggleChecklist={
+            taskWorkspace.handleToggleChecklist
+          }
+
+          onToggleCompleted={
+            taskWorkspace.handleToggleCompleted
+          }
+
+          onToggleArchived={
+            taskWorkspace.handleToggleArchived
+          }
+
+          onEdit={
+            taskWorkspace.openEdit
+          }
+
+          onDelete={
+            taskWorkspace.deleteTask
+          }
+        />
+
+        <NoteEditor
+          show={
+            notesWorkspace.showModal
+          }
+
+          closeNoteModal={
+            notesWorkspace.closeModal
+          }
+
+          noteForm={
+            notesWorkspace.form
+          }
+
+          setNoteForm={
+            notesWorkspace.setForm
+          }
+
+          noteMode={
+            notesWorkspace.mode
+          }
+
+          selectedNote={
+            notesWorkspace.selectedNote
+          }
+
+          noteErrors={
+            notesWorkspace.errors
+          }
+
+          formatNoteDate={
+            notesWorkspace.formatDate
+          }
+
+          toggleChecklistItemInNote={
+            notesWorkspace.toggleChecklistItemInNote
+          }
+
+          openEditNote={
+            notesWorkspace.openEdit
+          }
+
+          toggleNotePinned={
+            notesWorkspace.togglePinned
+          }
+
+          deleteNote={
+            notesWorkspace.remove
+          }
+
+          addNoteTextBlock={
+            notesWorkspace.addTextBlock
+          }
+
+          addNoteChecklistBlock={
+            notesWorkspace.addChecklistBlock
+          }
+
+          addNotePendingBlock={
+            notesWorkspace.addPendingBlock
+          }
+
+          removeNoteBlock={
+            notesWorkspace.removeBlock
+          }
+
+          updateNoteBlock={
+            notesWorkspace.updateBlock
+          }
+
+          updateChecklistItem={
+            notesWorkspace.updateChecklistItem
+          }
+
+          addChecklistItem={
+            notesWorkspace.addChecklistItem
+          }
+
+          saveNote={
+            notesWorkspace.save
+          }
+        />
+
+        <TaskModal
+          show={
+            taskWorkspace.showModal
+          }
+
+          closeForm={
+            taskWorkspace.closeForm
+          }
+
+          editing={
+            taskWorkspace.editing
+          }
+
+          form={
+            taskWorkspace.form
+          }
+
+          setForm={
+            taskWorkspace.setForm
+          }
+
+          errors={
+            taskWorkspace.errors
+          }
+
+          updateSegment={
+            taskWorkspace.updateSegment
+          }
+
+          removeSegment={
+            taskWorkspace.removeSegment
+          }
+
+          addSegment={
+            taskWorkspace.addSegment
+          }
+
+          updateResource={
+            taskWorkspace.updateResource
+          }
+
+          removeResource={
+            taskWorkspace.removeResource
+          }
+
+          addResource={
+            taskWorkspace.addResource
+          }
+
+          saveTask={
+            taskWorkspace.save
+          }
+        />
+
+        <AccountModal
+          show={
+            accountVault.showModal
+          }
+
+          onClose={() =>
+            accountVault.setShowModal(
+              false
+            )
+          }
+
+          accountForm={
+            accountVault.form
+          }
+
+          setAccountForm={
+            accountVault.setForm
+          }
+
+          accountErrors={
+            accountVault.errors
+          }
+
+          saveAccount={
+            accountVault.save
+          }
+        />
+
+        <ClientModal
+          show={
+            clientsWorkspace.showModal
+          }
+
+          onClose={
+            clientsWorkspace.closeModal
+          }
+
+          editingClient={
+            clientsWorkspace.editingId
+          }
+
+          clientForm={
+            clientsWorkspace.form
+          }
+
+          setClientForm={
+            clientsWorkspace.setForm
+          }
+
+          clientErrors={
+            clientsWorkspace.errors
+          }
+
+          updateClientProduct={
+            clientsWorkspace.updateProduct
+          }
+
+          removeClientProduct={
+            clientsWorkspace.removeProduct
+          }
+
+          addClientProduct={
+            clientsWorkspace.addProduct
+          }
+
+          saveClient={
+            clientsWorkspace.save
+          }
+        />
+
+        {showDashboardSettings && (
+          <DashboardSettings
+            cards={
+              dashboardDraft
+            }
+
+            onChange={
+              setDashboardDraft
+            }
+
+            onClose={() =>
+              setShowDashboardSettings(
+                false
+              )
+            }
+
+            onSave={
+              saveDashboardSettings
+            }
+          />
+        )}
+
+        <RecoveryCodeModal
+          code={
+            security.recoveryCodeToShow
+          }
+
+          onClose={
+            security.clearRecoveryCodeToShow
+          }
+
+          showAlert={
+            showAlert
+          }
+        />
+
+        <ConfirmDialog
+          alertData={
+            alertData
+          }
+
+          closeAlert={
+            closeAlert
+          }
+        />
+      </AnimatePresence>
+
+      {/* =====================================================
+          GLOBAL SEARCH
+      ===================================================== */}
+
+      <GlobalSearch
+        open={
+          searchOpen
+        }
+
+        query={
+          globalSearch
+        }
+
+        setQuery={
+          setGlobalSearch
+        }
+
+        onClose={
+          closeGlobalSearch
+        }
+
+        tasks={
+          taskStore.tasks
+        }
+
+        notes={
+          notesStore.notes
+        }
+
+        clients={
+          clients
+        }
+
+        accounts={
+          accounts
+        }
+
+        accountsUnlocked={
+          security.accountsUnlocked
+        }
+
+        onOpenTask={
+          openTaskFromSearch
+        }
+
+        onOpenNote={
+          openNoteFromSearch
+        }
+
+        onOpenClient={
+          openClientFromSearch
+        }
+
+        onOpenAccount={
+          openAccountFromSearch
+        }
+      />
+    </div>
+  );
 }
 
 export default App;

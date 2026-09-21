@@ -1,0 +1,550 @@
+/* =========================================================
+   CUENTAS PROTEGIDAS
+   SEGURIDAD
+========================================================= */
+
+
+/* =========================================================
+   ACCIONES DEL HEADER DE CUENTAS
+========================================================= */
+
+.accounts-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+
+  gap: 10px;
+
+  flex-wrap: wrap;
+}
+
+
+/* =========================================================
+   BOTONES DESHABILITADOS
+========================================================= */
+
+.lock-card button:disabled,
+.accounts-header-actions button:disabled {
+  opacity: 0.55;
+
+  cursor: not-allowed;
+
+  transform: none;
+}
+
+
+/* =========================================================
+   BOTÓN TIPO LINK
+   OLVIDÉ MI CONTRASEÑA / CANCELAR
+========================================================= */
+
+.security-link-btn {
+  width: auto;
+
+  margin-top: 12px;
+
+  padding: 8px 4px;
+
+  border: none;
+
+  background: transparent;
+
+  color: rgba(255, 255, 255, 0.75);
+
+  cursor: pointer;
+
+  font: inherit;
+  font-weight: 700;
+
+  text-decoration: underline;
+
+  text-underline-offset: 4px;
+
+  transition:
+    color 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.security-link-btn:hover {
+  color: #ffffff;
+}
+
+
+/* =========================================================
+   PASSKEY GENÉRICO
+========================================================= */
+
+.passkey-btn {
+  display: inline-flex;
+
+  align-items: center;
+  justify-content: center;
+
+  gap: 8px;
+}
+
+.compact-passkey-btn {
+  width: auto;
+
+  min-height: 42px;
+
+  margin: 0;
+}
+
+
+/* =========================================================
+   ACCIONES DE DESBLOQUEO
+
+   Contraseña y Passkey en una misma fila.
+========================================================= */
+
+.accounts-unlock-actions {
+  width: 100%;
+
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 1fr)
+    minmax(0, 1.35fr);
+
+  gap: 12px;
+
+  margin-top: 14px;
+}
+
+
+/* =========================================================
+   BASE DE AMBOS BOTONES
+========================================================= */
+
+.accounts-unlock-password,
+.accounts-unlock-passkey {
+  width: 100%;
+
+  min-width: 0;
+
+  min-height: 52px;
+
+  padding: 0 16px;
+
+  border-radius: 16px;
+
+  cursor: pointer;
+
+  font: inherit;
+
+  font-size: 14px;
+
+  font-weight: 800;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: center;
+
+  gap: 8px;
+
+  white-space: nowrap;
+
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+
+/* =========================================================
+   DESBLOQUEAR CON CONTRASEÑA
+========================================================= */
+
+.accounts-unlock-password {
+  border:
+    1px solid
+    rgba(255, 84, 110, 0.22);
+
+  background:
+    linear-gradient(
+      135deg,
+      #d8193b 0%,
+      #b31230 55%,
+      #8b0f1c 100%
+    );
+
+  color: #ffffff;
+
+  box-shadow:
+    0 10px 24px
+    rgba(180, 17, 46, 0.24);
+}
+
+
+/* =========================================================
+   DESBLOQUEAR CON PASSKEY
+========================================================= */
+
+.accounts-unlock-passkey {
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.18);
+
+  background: #ffffff;
+
+  color: #151515;
+
+  box-shadow:
+    0 8px 20px
+    rgba(0, 0, 0, 0.14);
+}
+
+.accounts-unlock-passkey svg {
+  flex-shrink: 0;
+}
+
+
+/* =========================================================
+   HOVER
+========================================================= */
+
+@media (hover: hover) {
+  .accounts-unlock-password:hover {
+    transform:
+      translateY(-1px);
+
+    box-shadow:
+      0 13px 28px
+      rgba(180, 17, 46, 0.32);
+  }
+
+  .accounts-unlock-passkey:hover {
+    transform:
+      translateY(-1px);
+
+    background:
+      #f3f3f3;
+
+    box-shadow:
+      0 11px 24px
+      rgba(0, 0, 0, 0.18);
+  }
+}
+
+
+/* =========================================================
+   CLICK
+========================================================= */
+
+.accounts-unlock-password:active,
+.accounts-unlock-passkey:active {
+  transform:
+    scale(0.98);
+}
+
+
+/* =========================================================
+   DISABLED
+========================================================= */
+
+.accounts-unlock-password:disabled,
+.accounts-unlock-passkey:disabled {
+  opacity: 0.55;
+
+  cursor: not-allowed;
+
+  transform: none;
+
+  box-shadow: none;
+}
+
+
+/* =========================================================
+   TABLET
+========================================================= */
+
+@media (max-width: 768px) {
+  .accounts-header-actions {
+    width: 100%;
+
+    justify-content: stretch;
+  }
+
+  .accounts-header-actions button {
+    flex: 1 1 0;
+  }
+
+  .compact-passkey-btn {
+    width: auto;
+  }
+}
+
+
+/* =========================================================
+   MÓVIL
+========================================================= */
+
+@media (max-width: 520px) {
+  .accounts-unlock-actions {
+    /*
+      Contraseña necesita menos espacio.
+
+      Passkey recibe un poco más porque
+      su texto es más largo.
+    */
+    grid-template-columns:
+      minmax(0, 0.85fr)
+      minmax(0, 1.4fr);
+
+    gap: 8px;
+
+    margin-top: 12px;
+  }
+
+  .accounts-unlock-password,
+  .accounts-unlock-passkey {
+    min-height: 50px;
+
+    padding:
+      0 9px;
+
+    border-radius: 15px;
+
+    font-size: 11px;
+
+    gap: 5px;
+  }
+
+  .accounts-unlock-passkey svg {
+    width: 16px;
+    height: 16px;
+  }
+
+  .accounts-unlock-passkey span {
+    white-space: nowrap;
+  }
+
+  .security-link-btn {
+    margin-top: 10px;
+
+    font-size: 12px;
+  }
+}
+
+
+/* =========================================================
+   MÓVILES MUY PEQUEÑOS
+========================================================= */
+
+@media (max-width: 360px) {
+  .accounts-unlock-actions {
+    grid-template-columns:
+      minmax(0, 0.8fr)
+      minmax(0, 1.45fr);
+
+    gap: 6px;
+  }
+
+  .accounts-unlock-password,
+  .accounts-unlock-passkey {
+    min-height: 48px;
+
+    padding:
+      0 7px;
+
+    font-size: 10px;
+  }
+
+  .accounts-unlock-passkey svg {
+    width: 15px;
+    height: 15px;
+  }
+}
+
+/* =========================================================
+   BOTÓN BLOQUEAR AHORA
+========================================================= */
+
+.account-lock-now-btn {
+  min-height: 48px;
+
+  padding: 0 18px;
+
+  border: 1px solid rgba(192, 32, 56, 0.35);
+
+  border-radius: 18px;
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(125, 14, 31, 0.92),
+      rgba(74, 9, 20, 0.96)
+    );
+
+  color: #ffffff;
+
+  font: inherit;
+  font-size: 13px;
+  font-weight: 800;
+
+  cursor: pointer;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 8px;
+
+  white-space: nowrap;
+
+  box-shadow:
+    0 8px 20px rgba(92, 10, 25, 0.24);
+
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.account-lock-now-btn svg {
+  width: 17px;
+  height: 17px;
+
+  flex-shrink: 0;
+}
+
+@media (hover: hover) {
+  .account-lock-now-btn:hover {
+    transform: translateY(-1px);
+
+    border-color: rgba(224, 55, 79, 0.55);
+
+    background:
+      linear-gradient(
+        135deg,
+        #8f1025,
+        #5f0b1a
+      );
+
+    box-shadow:
+      0 11px 25px rgba(110, 12, 29, 0.32);
+  }
+}
+
+.account-lock-now-btn:active {
+  transform: scale(0.98);
+}
+
+.account-lock-now-btn:disabled {
+  opacity: 0.55;
+
+  cursor: not-allowed;
+
+  transform: none;
+
+  box-shadow: none;
+}
+
+@media (max-width: 520px) {
+  .account-lock-now-btn {
+    min-height: 46px;
+
+    padding: 0 14px;
+
+    border-radius: 16px;
+
+    font-size: 12px;
+  }
+}
+
+/* =========================================================
+   BOTÓN AGREGAR CUENTA
+========================================================= */
+
+.account-add-btn {
+  min-height: 48px !important;
+
+  padding: 0 18px !important;
+
+  border: 1px solid rgba(209, 39, 66, 0.48) !important;
+
+  border-radius: 18px !important;
+
+  background:
+    linear-gradient(
+      135deg,
+      #7f1022 0%,
+      #5b0b18 100%
+    ) !important;
+
+  color: #ffffff !important;
+
+  font: inherit !important;
+  font-size: 13px !important;
+  font-weight: 800 !important;
+
+  cursor: pointer;
+
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+
+  gap: 7px;
+
+  white-space: nowrap;
+
+  box-shadow:
+    0 8px 20px
+    rgba(92, 10, 25, 0.24);
+
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+@media (hover: hover) {
+  .account-add-btn:hover {
+    transform: translateY(-1px);
+
+    background:
+      linear-gradient(
+        135deg,
+        #941229,
+        #6b0d1d
+      ) !important;
+
+    border-color:
+      rgba(230, 62, 88, 0.65) !important;
+
+    box-shadow:
+      0 11px 25px
+      rgba(110, 12, 29, 0.32);
+  }
+}
+
+.account-add-btn:active {
+  transform: scale(0.98);
+}
+
+.account-add-btn:disabled {
+  opacity: 0.55;
+
+  cursor: not-allowed;
+
+  transform: none;
+
+  box-shadow: none;
+}
+
+@media (max-width: 520px) {
+  .account-add-btn {
+    min-height: 46px !important;
+
+    padding: 0 14px !important;
+
+    border-radius: 16px !important;
+
+    font-size: 12px !important;
+  }
+}

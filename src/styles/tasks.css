@@ -1,1 +1,14 @@
 /* Kept in app.css during the first safe structural refactor. */
+
+/* Estados completada / archivada */
+.task-card.completed { opacity: .78; }
+.task-card.completed .task-cover { filter: saturate(.55); }
+.task-card.archived { opacity: .66; }
+.completed-label, .archived-label { display:inline-flex; align-items:center; gap:5px; width:max-content; padding:4px 8px; border-radius:999px; font-size:11px; font-weight:900; margin-top:7px; }
+.completed-label { background:rgba(52,170,92,.18); color:#91e0aa; border:1px solid rgba(52,170,92,.3); }
+.archived-label { background:rgba(255,255,255,.08); color:rgba(255,255,255,.76); border:1px solid rgba(255,255,255,.12); }
+.task-state-row { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin-bottom:8px; }
+.task-main-state-actions { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:12px 0; }
+.task-complete-btn, .task-archive-btn { border:1px solid rgba(255,255,255,.12); border-radius:14px; padding:10px 12px; color:#fff; background:rgba(255,255,255,.055); display:flex; align-items:center; justify-content:center; gap:7px; cursor:pointer; }
+.task-complete-btn.done { background:rgba(52,170,92,.16); border-color:rgba(52,170,92,.3); }
+@media (max-width:560px) { .task-main-state-actions { grid-template-columns:1fr; } }

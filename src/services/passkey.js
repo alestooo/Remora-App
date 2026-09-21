@@ -1,5 +1,5 @@
 export const isPasskeySupported = () => {
-  return window.PublicKeyCredential && navigator.credentials;
+  return Boolean(window.PublicKeyCredential && navigator.credentials);
 };
 
 const bufferToBase64url = (buffer) => {
@@ -11,7 +11,10 @@ const bufferToBase64url = (buffer) => {
 
 const base64urlToBuffer = (base64url) => {
   const base64 = base64url.replace(/-/g, "+").replace(/_/g, "/");
-  const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), "=");
+  const padded = base64.padEnd(
+    base64.length + ((4 - (base64.length % 4)) % 4),
+    "="
+  );
   const binary = atob(padded);
   return Uint8Array.from(binary, (char) => char.charCodeAt(0));
 };
@@ -22,9 +25,21 @@ const randomChallenge = () => {
   return challenge;
 };
 
+export const getPasskeyCredentialIds = (securityData = {}) => {
+  const storedIds = Array.isArray(securityData.passkeyCredentialIds)
+    ? securityData.passkeyCredentialIds
+    : [];
+
+  const legacyId = securityData.passkeyCredentialId
+    ? [securityData.passkeyCredentialId]
+    : [];
+
+  return [...new Set([...storedIds, ...legacyId].filter(Boolean))];
+};
+
 export const registerPasskey = async (user) => {
   if (!isPasskeySupported()) {
-    throw new Error("Este navegador no soporta Passkeys.");
+    throw new Error("Este navegador o dispositivo no soporta Passkeys.");
   }
 
   const credential = await navigator.credentials.create({
@@ -52,27 +67,41 @@ export const registerPasskey = async (user) => {
     },
   });
 
+  if (!credential) {
+    throw new Error("No se pudo crear la Passkey.");
+  }
+
   return bufferToBase64url(credential.rawId);
 };
 
-export const unlockWithPasskey = async (credentialId) => {
+export const unlockWithPasskey = async (credentialIds) => {
   if (!isPasskeySupported()) {
-    throw new Error("Este navegador no soporta Passkeys.");
+    throw new Error("Este navegador o dispositivo no soporta Passkeys.");
   }
 
-  await navigator.credentials.get({
+  const ids = Array.isArray(credentialIds)
+    ? credentialIds.filter(Boolean)
+    : [credentialIds].filter(Boolean);
+
+  if (ids.length === 0) {
+    throw new Error("No hay ninguna Passkey registrada todavía.");
+  }
+
+  const credential = await navigator.credentials.get({
     publicKey: {
       challenge: randomChallenge(),
-      allowCredentials: [
-        {
-          id: base64urlToBuffer(credentialId),
-          type: "public-key",
-        },
-      ],
+      allowCredentials: ids.map((id) => ({
+        id: base64urlToBuffer(id),
+        type: "public-key",
+      })),
       userVerification: "required",
       timeout: 60000,
     },
   });
+
+  if (!credential) {
+    throw new Error("No se pudo verificar la Passkey.");
+  }
 
   return true;
 };

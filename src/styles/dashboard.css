@@ -1,0 +1,1118 @@
+/* =========================================================
+   DASHBOARD / RESUMEN DE INICIO
+========================================================= */
+
+.dashboard-section {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+
+  margin: 0 0 22px;
+}
+
+
+/* =========================================================
+   ENCABEZADO
+========================================================= */
+
+.dashboard-section-heading {
+  display: flex;
+
+  justify-content:
+    space-between;
+
+  align-items:
+    flex-end;
+
+  gap: 14px;
+
+  margin-bottom: 12px;
+}
+
+.dashboard-heading-copy {
+  min-width: 0;
+}
+
+.dashboard-section-heading h2 {
+  margin: 0;
+}
+
+.dashboard-section-heading p {
+  margin:
+    4px
+    0
+    0;
+
+  color:
+    rgba(
+      255,
+      255,
+      255,
+      0.62
+    );
+}
+
+
+/* =========================================================
+   BOTÓN PERSONALIZAR
+========================================================= */
+
+.dashboard-settings-btn,
+.dashboard-hidden-state button {
+  border:
+    1px solid
+    rgba(
+      255,
+      255,
+      255,
+      0.12
+    );
+
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.06
+    );
+
+  color:
+    #ffffff;
+
+  border-radius:
+    14px;
+
+  padding:
+    9px
+    12px;
+
+  display:
+    inline-flex;
+
+  align-items:
+    center;
+
+  justify-content:
+    center;
+
+  gap: 7px;
+
+  cursor: pointer;
+
+  font: inherit;
+
+  font-weight:
+    800;
+
+  transition:
+    background
+      0.2s
+      ease,
+    border-color
+      0.2s
+      ease,
+    transform
+      0.2s
+      ease;
+}
+
+
+/* =========================================================
+   PERSONALIZAR MÓVIL
+
+   En PC está oculto porque utilizamos
+   el botón del encabezado.
+========================================================= */
+
+.dashboard-settings-mobile {
+  display: none;
+}
+
+
+/* =========================================================
+   HOVER PC
+========================================================= */
+
+@media (hover: hover) {
+  .dashboard-settings-btn:hover,
+  .dashboard-hidden-state button:hover {
+    transform:
+      translateY(
+        -1px
+      );
+
+    background:
+      rgba(
+        255,
+        255,
+        255,
+        0.095
+      );
+
+    border-color:
+      rgba(
+        255,
+        255,
+        255,
+        0.19
+      );
+  }
+}
+
+
+/* =========================================================
+   ABRIR / MINIMIZAR
+
+   OCULTO EN PC
+========================================================= */
+
+.dashboard-summary-toggle {
+  display: none;
+}
+
+.dashboard-summary-content {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+
+/* =========================================================
+   GRID DE TARJETAS
+========================================================= */
+
+.dashboard-cards-grid {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      3,
+      minmax(
+        0,
+        1fr
+      )
+    );
+
+  gap: 12px;
+}
+
+
+/* =========================================================
+   TARJETA
+========================================================= */
+
+.dashboard-card {
+  position:
+    relative;
+
+  min-width: 0;
+
+  min-height:
+    132px;
+
+  border:
+    1px solid
+    rgba(
+      255,
+      255,
+      255,
+      0.1
+    );
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(
+        139,
+        15,
+        28,
+        0.24
+      ),
+      rgba(
+        255,
+        255,
+        255,
+        0.045
+      )
+    );
+
+  color:
+    #ffffff;
+
+  border-radius:
+    22px;
+
+  padding:
+    17px;
+
+  text-align:
+    left;
+
+  display:
+    grid;
+
+  grid-template-columns:
+    auto
+    minmax(
+      0,
+      1fr
+    )
+    auto;
+
+  gap:
+    12px;
+
+  align-items:
+    start;
+
+  cursor:
+    pointer;
+
+  overflow:
+    hidden;
+
+  transition:
+    transform
+      0.2s
+      ease,
+    border-color
+      0.2s
+      ease;
+}
+
+
+/* =========================================================
+   HOVER TARJETA
+========================================================= */
+
+@media (hover: hover) {
+  .dashboard-card:hover {
+    transform:
+      translateY(
+        -2px
+      );
+
+    border-color:
+      rgba(
+        179,
+        30,
+        46,
+        0.42
+      );
+  }
+}
+
+
+/* =========================================================
+   ICONO
+========================================================= */
+
+.dashboard-card-icon {
+  width: 42px;
+  height: 42px;
+
+  flex-shrink: 0;
+
+  display: grid;
+
+  place-items:
+    center;
+
+  border-radius:
+    14px;
+
+  background:
+    rgba(
+      139,
+      15,
+      28,
+      0.55
+    );
+}
+
+
+/* =========================================================
+   CONTENIDO DE TARJETA
+========================================================= */
+
+.dashboard-card-content {
+  min-width: 0;
+
+  display: flex;
+
+  flex-direction:
+    column;
+}
+
+.dashboard-card-content span {
+  color:
+    rgba(
+      255,
+      255,
+      255,
+      0.7
+    );
+
+  font-size:
+    12px;
+
+  font-weight:
+    800;
+}
+
+.dashboard-card-content strong {
+  max-width:
+    100%;
+
+  margin:
+    4px
+    0
+    2px;
+
+  overflow:
+    hidden;
+
+  color:
+    #ffffff;
+
+  font-size:
+    24px;
+
+  text-overflow:
+    ellipsis;
+
+  white-space:
+    nowrap;
+}
+
+.dashboard-card-content small {
+  max-width:
+    100%;
+
+  overflow:
+    hidden;
+
+  color:
+    rgba(
+      255,
+      255,
+      255,
+      0.72
+    );
+
+  text-overflow:
+    ellipsis;
+
+  white-space:
+    nowrap;
+}
+
+.dashboard-card-arrow {
+  margin-top:
+    10px;
+
+  flex-shrink:
+    0;
+
+  opacity:
+    0.55;
+}
+
+
+/* =========================================================
+   TODAS LAS TARJETAS OCULTAS
+========================================================= */
+
+.dashboard-hidden-state {
+  width:
+    100%;
+
+  max-width:
+    100%;
+
+  margin-bottom:
+    20px;
+
+  padding:
+    14px;
+
+  border:
+    1px dashed
+    rgba(
+      255,
+      255,
+      255,
+      0.16
+    );
+
+  border-radius:
+    18px;
+
+  display:
+    flex;
+
+  justify-content:
+    space-between;
+
+  align-items:
+    center;
+
+  gap:
+    12px;
+
+  color:
+    rgba(
+      255,
+      255,
+      255,
+      0.68
+    );
+}
+
+
+/* =========================================================
+   MODAL PERSONALIZAR
+========================================================= */
+
+.dashboard-settings-modal {
+  position:
+    relative;
+
+  width:
+    min(
+      520px,
+      92vw
+    );
+
+  background:
+    #171717;
+
+  color:
+    #ffffff;
+
+  border:
+    1px solid
+    rgba(
+      255,
+      255,
+      255,
+      0.12
+    );
+
+  border-radius:
+    24px;
+
+  padding:
+    24px;
+}
+
+.dashboard-settings-list {
+  display:
+    grid;
+
+  gap:
+    8px;
+
+  margin:
+    18px
+    0;
+}
+
+.dashboard-setting-row {
+  display:
+    grid;
+
+  grid-template-columns:
+    auto
+    1fr
+    auto;
+
+  align-items:
+    center;
+
+  gap:
+    12px;
+
+  padding:
+    11px;
+
+  border-radius:
+    14px;
+
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.055
+    );
+}
+
+.dashboard-visibility-btn,
+.dashboard-order-actions button {
+  width:
+    36px;
+
+  height:
+    36px;
+
+  border:
+    0;
+
+  border-radius:
+    10px;
+
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.08
+    );
+
+  color:
+    #ffffff;
+
+  cursor:
+    pointer;
+
+  display:
+    grid;
+
+  place-items:
+    center;
+}
+
+.dashboard-visibility-btn.off {
+  opacity:
+    0.48;
+}
+
+.dashboard-order-actions {
+  display:
+    flex;
+
+  gap:
+    5px;
+}
+
+.dashboard-order-actions button:disabled {
+  opacity:
+    0.25;
+
+  cursor:
+    not-allowed;
+}
+
+
+/* =========================================================
+   FILTRO ACTIVADO DESDE RESUMEN
+========================================================= */
+
+.home-scope-bar {
+  width:
+    100%;
+
+  max-width:
+    100%;
+
+  min-width:
+    0;
+
+  display:
+    flex;
+
+  align-items:
+    center;
+
+  gap:
+    8px;
+
+  margin:
+    0
+    0
+    14px;
+}
+
+.home-scope-bar button {
+  border:
+    1px solid
+    rgba(
+      255,
+      255,
+      255,
+      0.12
+    );
+
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.05
+    );
+
+  color:
+    #ffffff;
+
+  border-radius:
+    999px;
+
+  padding:
+    7px
+    12px;
+
+  cursor:
+    pointer;
+}
+
+
+/* =========================================================
+   TABLET / MÓVIL
+========================================================= */
+
+@media (max-width: 800px) {
+
+  /* =======================================================
+     FIX OVERFLOW HORIZONTAL
+
+     Corrige la barra horizontal roja que aparecía abajo
+     en Inicio.
+  ======================================================= */
+
+  html,
+  body,
+  #root,
+  .app,
+  .content {
+    width:
+      100%;
+
+    max-width:
+      100%;
+
+    overflow-x:
+      hidden;
+  }
+
+  .content,
+  .home-toolbar,
+  .filters,
+  .date-group,
+  .task-grid,
+  .dashboard-section,
+  .dashboard-summary-content,
+  .dashboard-cards-grid {
+    min-width:
+      0;
+
+    max-width:
+      100%;
+  }
+
+
+  /* =======================================================
+     TOOLBAR INICIO
+  ======================================================= */
+
+  .home-toolbar {
+    width:
+      100%;
+
+    overflow:
+      hidden;
+  }
+
+
+  /* =======================================================
+     FILTROS
+
+     Se pueden mover con el dedo,
+     pero sin mover toda la página.
+  ======================================================= */
+
+  .filters {
+    width:
+      100%;
+
+    max-width:
+      100%;
+
+    min-width:
+      0;
+
+    overflow-x:
+      auto;
+
+    overflow-y:
+      hidden;
+
+    overscroll-behavior-inline:
+      contain;
+
+    -webkit-overflow-scrolling:
+      touch;
+
+    scrollbar-width:
+      none;
+  }
+
+  .filters::-webkit-scrollbar {
+    display:
+      none;
+
+    width:
+      0;
+
+    height:
+      0;
+  }
+
+  .filters button {
+    flex:
+      0
+      0
+      auto;
+
+    white-space:
+      nowrap;
+  }
+
+
+  /* =======================================================
+     RESUMEN
+  ======================================================= */
+
+  .dashboard-section {
+    margin-bottom:
+      16px;
+  }
+
+  .dashboard-section-heading {
+    align-items:
+      flex-start;
+
+    margin-bottom:
+      11px;
+  }
+
+  .dashboard-section-heading h2 {
+    font-size:
+      24px;
+  }
+
+  .dashboard-section-heading p {
+    line-height:
+      1.4;
+  }
+
+
+  /* =======================================================
+     PERSONALIZAR PC OCULTO
+  ======================================================= */
+
+  .dashboard-settings-desktop {
+    display:
+      none;
+  }
+
+
+  /* =======================================================
+     BOTÓN VER RESUMEN / MINIMIZAR
+  ======================================================= */
+
+  .dashboard-summary-toggle {
+    width:
+      100%;
+
+    min-height:
+      46px;
+
+    padding:
+      0
+      15px;
+
+    border:
+      1px solid
+      rgba(
+        255,
+        255,
+        255,
+        0.1
+      );
+
+    border-radius:
+      15px;
+
+    background:
+      linear-gradient(
+        145deg,
+        rgba(
+          255,
+          255,
+          255,
+          0.065
+        ),
+        rgba(
+          255,
+          255,
+          255,
+          0.035
+        )
+      );
+
+    color:
+      #ffffff;
+
+    cursor:
+      pointer;
+
+    display:
+      flex;
+
+    align-items:
+      center;
+
+    justify-content:
+      space-between;
+
+    gap:
+      10px;
+
+    font:
+      inherit;
+
+    font-size:
+      13px;
+
+    font-weight:
+      900;
+
+    transition:
+      background
+        0.2s
+        ease,
+      border-color
+        0.2s
+        ease,
+      transform
+        0.2s
+        ease;
+  }
+
+  .dashboard-summary-toggle:active {
+    transform:
+      scale(
+        0.99
+      );
+  }
+
+
+  /* =======================================================
+     FLECHA
+  ======================================================= */
+
+  .dashboard-summary-chevron {
+    flex-shrink:
+      0;
+
+    transition:
+      transform
+        0.24s
+        ease;
+  }
+
+  .dashboard-summary-toggle.open
+  .dashboard-summary-chevron {
+    transform:
+      rotate(
+        180deg
+      );
+  }
+
+
+  /* =======================================================
+     CONTENIDO AL ABRIR
+  ======================================================= */
+
+  .dashboard-summary-content {
+    margin-top:
+      11px;
+
+    animation:
+      remoraDashboardSummaryOpen
+      0.2s
+      ease-out;
+  }
+
+
+  /* =======================================================
+     PERSONALIZAR EN MÓVIL
+  ======================================================= */
+
+  .dashboard-settings-mobile {
+    width:
+      100%;
+
+    min-height:
+      44px;
+
+    margin-bottom:
+      12px;
+
+    display:
+      flex;
+
+    border-radius:
+      14px;
+  }
+
+
+  /* =======================================================
+     TARJETAS UNA DEBAJO DE OTRA
+  ======================================================= */
+
+  .dashboard-cards-grid {
+    grid-template-columns:
+      1fr;
+
+    gap:
+      11px;
+  }
+
+  .dashboard-card {
+    min-height:
+      105px;
+
+    padding:
+      15px;
+
+    border-radius:
+      20px;
+  }
+
+
+  /* =======================================================
+     SIN TARJETAS
+  ======================================================= */
+
+  .dashboard-hidden-state {
+    flex-direction:
+      column;
+
+    align-items:
+      stretch;
+  }
+
+  .dashboard-hidden-state button {
+    width:
+      100%;
+  }
+}
+
+
+/* =========================================================
+   MÓVIL
+========================================================= */
+
+@media (max-width: 560px) {
+  .dashboard-section-heading {
+    display:
+      block;
+  }
+
+  .dashboard-section-heading p {
+    font-size:
+      14px;
+  }
+
+  .dashboard-card-content strong {
+    font-size:
+      23px;
+  }
+
+  .home-scope-bar {
+    align-items:
+      flex-start;
+
+    justify-content:
+      space-between;
+  }
+}
+
+
+/* =========================================================
+   MÓVIL PEQUEÑO
+========================================================= */
+
+@media (max-width: 380px) {
+  .dashboard-summary-toggle {
+    min-height:
+      44px;
+
+    padding:
+      0
+      12px;
+
+    font-size:
+      12px;
+  }
+
+  .dashboard-card {
+    grid-template-columns:
+      auto
+      minmax(
+        0,
+        1fr
+      )
+      auto;
+
+    gap:
+      10px;
+
+    padding:
+      14px;
+  }
+
+  .dashboard-card-icon {
+    width:
+      39px;
+
+    height:
+      39px;
+
+    border-radius:
+      13px;
+  }
+}
+
+
+/* =========================================================
+   ANIMACIÓN DE APERTURA
+========================================================= */
+
+@keyframes remoraDashboardSummaryOpen {
+  from {
+    opacity:
+      0;
+
+    transform:
+      translateY(
+        -5px
+      );
+  }
+
+  to {
+    opacity:
+      1;
+
+    transform:
+      translateY(
+        0
+      );
+  }
+}

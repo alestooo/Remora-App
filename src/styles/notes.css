@@ -1,1 +1,585 @@
-/* Kept in app.css during the first safe structural refactor. */
+/* =========================================================
+   BLOC DE NOTAS
+   HEADER / SEARCH / ACTIONS
+========================================================= */
+
+
+/* =========================================================
+   HEADER PRINCIPAL
+========================================================= */
+
+.notes-header {
+  width: 100%;
+
+  display: grid;
+
+  grid-template-columns:
+    minmax(260px, 1fr)
+    auto;
+
+  align-items: center;
+
+  gap: 24px;
+
+  padding: 20px;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.08);
+
+  border-radius: 28px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(18, 19, 24, 0.98),
+      rgba(13, 14, 18, 0.98)
+    );
+
+  box-sizing: border-box;
+}
+
+
+/* =========================================================
+   TÍTULO
+========================================================= */
+
+.notes-header-info {
+  min-width: 0;
+}
+
+.notes-header-info h2 {
+  margin: 0 0 4px;
+
+  color: #ffffff;
+
+  font-size: 23px;
+}
+
+.notes-header-info p {
+  margin: 0;
+
+  color: #9ca3af;
+
+  font-weight: 700;
+
+  line-height: 1.4;
+}
+
+
+/* =========================================================
+   CONTROLES DEL LADO DERECHO
+========================================================= */
+
+.notes-header-controls {
+  min-width: 0;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: flex-end;
+
+  gap: 14px;
+}
+
+
+/* =========================================================
+   BUSCADOR
+========================================================= */
+
+.notes-search-box {
+  width: 270px;
+  min-width: 270px;
+  height: 50px;
+
+  display: flex;
+  align-items: center;
+
+  gap: 10px;
+
+  padding: 0 16px;
+
+  box-sizing: border-box;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.09);
+
+  border-radius: 17px;
+
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.025
+    );
+
+  color:
+    rgba(
+      255,
+      255,
+      255,
+      0.82
+    );
+
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.notes-search-box:focus-within {
+  border-color:
+    rgba(
+      213,
+      37,
+      66,
+      0.48
+    );
+
+  background:
+    rgba(
+      255,
+      255,
+      255,
+      0.04
+    );
+
+  box-shadow:
+    0 0 0 3px
+    rgba(
+      187,
+      20,
+      46,
+      0.08
+    );
+}
+
+.notes-search-box svg {
+  flex-shrink: 0;
+
+  color:
+    rgba(
+      255,
+      255,
+      255,
+      0.84
+    );
+}
+
+.notes-search-box input {
+  width: 100%;
+  min-width: 0;
+
+  padding: 0 !important;
+
+  border: none !important;
+
+  outline: none !important;
+
+  background: transparent !important;
+
+  color: #ffffff !important;
+
+  font: inherit;
+
+  font-size: 14px;
+}
+
+.notes-search-box input::placeholder {
+  color:
+    rgba(
+      255,
+      255,
+      255,
+      0.4
+    );
+}
+
+
+/* =========================================================
+   CONTENEDOR DE BOTONES
+========================================================= */
+
+.notes-actions {
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      2,
+      142px
+    );
+
+  gap: 10px;
+
+  align-items: stretch;
+}
+
+
+/* =========================================================
+   BASE DE LOS 2 BOTONES
+========================================================= */
+
+.notes-action-btn {
+  width: 142px;
+  height: 52px;
+
+  min-width: 142px;
+  min-height: 52px;
+
+  margin: 0 !important;
+
+  padding:
+    0 16px !important;
+
+  box-sizing: border-box;
+
+  border-radius:
+    17px !important;
+
+  cursor: pointer;
+
+  display: inline-flex;
+
+  align-items: center;
+  justify-content: center;
+
+  gap: 8px;
+
+  white-space: nowrap;
+
+  font: inherit;
+
+  font-size: 13px;
+
+  font-weight: 900;
+
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.notes-action-btn svg {
+  width: 18px;
+  height: 18px;
+
+  flex-shrink: 0;
+}
+
+
+/* =========================================================
+   ORDENAR
+========================================================= */
+
+.notes-reorder-btn {
+  border:
+    1px solid
+    rgba(
+      255,
+      255,
+      255,
+      0.065
+    ) !important;
+
+  background:
+    #272934 !important;
+
+  color:
+    #ffffff !important;
+
+  box-shadow:
+    0 7px 18px
+    rgba(
+      0,
+      0,
+      0,
+      0.12
+    );
+}
+
+.notes-reorder-btn.active {
+  border-color:
+    rgba(
+      240,
+      49,
+      76,
+      0.36
+    ) !important;
+
+  background:
+    linear-gradient(
+      135deg,
+      #d71b3a,
+      #991026
+    ) !important;
+
+  box-shadow:
+    0 9px 22px
+    rgba(
+      180,
+      18,
+      46,
+      0.24
+    );
+}
+
+
+/* =========================================================
+   NUEVA NOTA
+========================================================= */
+
+.notes-create-btn {
+  border:
+    1px solid
+    rgba(
+      221,
+      47,
+      75,
+      0.3
+    ) !important;
+
+  background:
+    linear-gradient(
+      135deg,
+      #d7193a,
+      #971026
+    ) !important;
+
+  color:
+    #ffffff !important;
+
+  box-shadow:
+    0 9px 23px
+    rgba(
+      184,
+      18,
+      47,
+      0.25
+    ) !important;
+}
+
+
+/* =========================================================
+   HOVER PC
+========================================================= */
+
+@media (hover: hover) {
+  .notes-action-btn:hover {
+    transform:
+      translateY(-1px);
+  }
+
+  .notes-reorder-btn:hover {
+    background:
+      #30323f !important;
+
+    border-color:
+      rgba(
+        255,
+        255,
+        255,
+        0.1
+      ) !important;
+
+    box-shadow:
+      0 9px 20px
+      rgba(
+        0,
+        0,
+        0,
+        0.16
+      );
+  }
+
+  .notes-reorder-btn.active:hover {
+    background:
+      linear-gradient(
+        135deg,
+        #e01c3e,
+        #a61129
+      ) !important;
+  }
+
+  .notes-create-btn:hover {
+    background:
+      linear-gradient(
+        135deg,
+        #e71d40,
+        #a9112b
+      ) !important;
+
+    box-shadow:
+      0 12px 27px
+      rgba(
+        184,
+        18,
+        47,
+        0.32
+      ) !important;
+  }
+}
+
+
+/* =========================================================
+   CLICK
+========================================================= */
+
+.notes-action-btn:active {
+  transform:
+    scale(0.98);
+}
+
+
+/* =========================================================
+   TABLET
+========================================================= */
+
+@media (max-width: 1050px) {
+  .notes-header {
+    grid-template-columns:
+      1fr;
+  }
+
+  .notes-header-controls {
+    width: 100%;
+
+    justify-content:
+      space-between;
+  }
+
+  .notes-search-box {
+    flex: 1;
+
+    width: auto;
+    min-width: 220px;
+  }
+
+  .notes-actions {
+    flex-shrink: 0;
+  }
+}
+
+
+/* =========================================================
+   MÓVIL
+========================================================= */
+
+@media (max-width: 700px) {
+  .notes-header {
+    display: flex;
+
+    flex-direction: column;
+
+    align-items: stretch;
+
+    gap: 17px;
+
+    padding: 20px;
+
+    border-radius: 26px;
+  }
+
+  .notes-header-controls {
+    display: flex;
+
+    flex-direction: column;
+
+    align-items: stretch;
+
+    gap: 16px;
+  }
+
+  /* =======================================================
+     BUSCADOR MÓVIL
+     Un poco más alto que en PC
+  ======================================================= */
+
+  .notes-search-box {
+    width: 100%;
+
+    min-width: 0;
+
+    height: 56px;
+
+    padding: 0 18px;
+
+    border-radius: 18px;
+  }
+
+  .notes-search-box input {
+    font-size: 15px;
+  }
+
+  .notes-search-box svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  /* =======================================================
+     BOTONES 50 / 50
+  ======================================================= */
+
+  .notes-actions {
+    width: 100%;
+
+    display: grid;
+
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+
+    gap: 10px;
+  }
+
+  .notes-action-btn {
+    width: 100%;
+
+    min-width: 0;
+
+    height: 52px;
+    min-height: 52px;
+
+    padding:
+      0 10px !important;
+
+    border-radius:
+      17px !important;
+  }
+}
+
+
+/* =========================================================
+   MÓVILES PEQUEÑOS
+========================================================= */
+
+@media (max-width: 380px) {
+  .notes-header {
+    padding: 17px;
+  }
+
+  .notes-search-box {
+    height: 54px;
+
+    padding: 0 16px;
+  }
+
+  .notes-search-box input {
+    font-size: 14px;
+  }
+
+  .notes-action-btn {
+    font-size: 12px;
+
+    gap: 6px;
+  }
+
+  .notes-action-btn svg {
+    width: 16px;
+    height: 16px;
+  }
+}

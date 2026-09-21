@@ -1,1 +1,1435 @@
-/* Kept in app.css during the first safe structural refactor. */
+/* =========================================================
+   PROGRESS PAGE
+========================================================= */
+
+.progress-page {
+  width: 100%;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 18px;
+}
+
+
+/* =========================================================
+   RANGE TABS
+========================================================= */
+
+.progress-range-tabs {
+  display: flex;
+  flex-wrap: wrap;
+
+  gap: 9px;
+
+  margin-bottom: 4px;
+}
+
+.progress-range-tabs button {
+  min-height: 42px;
+
+  padding: 0 17px;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.11);
+
+  border-radius: 999px;
+
+  background:
+    rgba(255, 255, 255, 0.045);
+
+  color:
+    rgba(255, 255, 255, 0.78);
+
+  cursor: pointer;
+
+  font: inherit;
+  font-weight: 800;
+
+  transition:
+    background 0.22s ease,
+    border-color 0.22s ease,
+    color 0.22s ease,
+    transform 0.22s ease;
+}
+
+.progress-range-tabs button:hover {
+  transform:
+    translateY(-1px);
+
+  background:
+    rgba(255, 255, 255, 0.075);
+
+  color: #ffffff;
+}
+
+.progress-range-tabs button.active {
+  border-color:
+    #a91227;
+
+  background:
+    linear-gradient(
+      135deg,
+      #bd1730,
+      #86101f
+    );
+
+  color: #ffffff;
+
+  box-shadow:
+    0 8px 20px
+    rgba(139, 15, 28, 0.26);
+}
+
+
+/* =========================================================
+   GENERAL PROGRESS CARDS
+========================================================= */
+
+.progress-card {
+  padding: 22px;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.09);
+
+  border-radius: 24px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(21, 22, 28, 0.96),
+      rgba(13, 14, 18, 0.97)
+    );
+
+  box-shadow:
+    0 15px 38px
+    rgba(0, 0, 0, 0.18);
+}
+
+.progress-card h2 {
+  margin:
+    0 0 16px;
+
+  color: #ffffff;
+}
+
+
+/* =========================================================
+   SUMMARY
+========================================================= */
+
+.progress-summary-grid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      3,
+      minmax(0, 1fr)
+    );
+
+  gap: 12px;
+}
+
+.progress-summary-card {
+  min-height: 128px;
+
+  padding: 18px;
+
+  display: grid;
+
+  grid-template-columns:
+    auto 1fr;
+
+  gap: 9px 12px;
+
+  align-items: center;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.085);
+
+  border-radius: 20px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.06),
+      rgba(255, 255, 255, 0.025)
+    );
+}
+
+.progress-summary-icon {
+  width: 40px;
+  height: 40px;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 13px;
+
+  background:
+    rgba(179, 21, 44, 0.16);
+
+  color: #e85065;
+}
+
+.progress-summary-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.progress-summary-card span {
+  color:
+    rgba(255, 255, 255, 0.67);
+
+  font-weight: 800;
+}
+
+.progress-summary-card strong {
+  grid-column:
+    1 / -1;
+
+  font-size: 29px;
+
+  color: #ffffff;
+}
+
+
+/* =========================================================
+   WEEKLY CHART
+========================================================= */
+
+.weekly-chart {
+  min-height: 160px;
+
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-around;
+
+  gap: 12px;
+
+  padding:
+    15px 4px 0;
+}
+
+.bar-item {
+  flex: 1;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+
+  gap: 7px;
+}
+
+.bar-item .bar {
+  width: min(52px, 80%);
+
+  min-height: 14px;
+
+  border-radius:
+    14px 14px
+    7px 7px;
+
+  background:
+    linear-gradient(
+      180deg,
+      #d6213d,
+      #85101e
+    );
+
+  box-shadow:
+    0 8px 18px
+    rgba(150, 15, 32, 0.22);
+
+  transition:
+    height 0.35s ease;
+}
+
+.bar-item span {
+  color:
+    rgba(255, 255, 255, 0.76);
+
+  font-weight: 800;
+}
+
+.bar-item small {
+  color:
+    rgba(255, 255, 255, 0.5);
+}
+
+
+/* =========================================================
+   CATEGORY / UPCOMING
+========================================================= */
+
+.category-row,
+.next-task {
+  min-height: 50px;
+
+  display: flex;
+
+  align-items: center;
+  justify-content: space-between;
+
+  gap: 14px;
+
+  padding:
+    10px 4px;
+
+  border-bottom:
+    1px solid
+    rgba(255, 255, 255, 0.065);
+}
+
+.category-row:last-child,
+.next-task:last-child {
+  border-bottom: none;
+}
+
+
+/* =========================================================
+   ALEKEY CARDS
+========================================================= */
+
+.alekey-progress-card,
+.alekey-days-card {
+  overflow: hidden;
+
+  position: relative;
+}
+
+.alekey-progress-card::before,
+.alekey-days-card::before {
+  content: "";
+
+  position: absolute;
+
+  width: 250px;
+  height: 250px;
+
+  top: -150px;
+  right: -100px;
+
+  border-radius: 50%;
+
+  background:
+    radial-gradient(
+      circle,
+      rgba(159, 20, 39, 0.16),
+      transparent 68%
+    );
+
+  pointer-events: none;
+}
+
+.alekey-progress-heading {
+  position: relative;
+
+  z-index: 1;
+
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+
+  gap: 16px;
+
+  margin-bottom: 18px;
+}
+
+.alekey-progress-heading h2 {
+  margin:
+    4px 0 3px;
+
+  font-size: 24px;
+}
+
+.alekey-progress-heading p {
+  margin: 0;
+
+  color:
+    rgba(255, 255, 255, 0.55);
+
+  font-size: 14px;
+}
+
+.progress-eyebrow {
+  color: #e4495f;
+
+  font-size: 12px;
+  font-weight: 900;
+
+  text-transform: uppercase;
+
+  letter-spacing: 0.12em;
+}
+
+.alekey-progress-heading-icon {
+  width: 48px;
+  height: 48px;
+
+  flex-shrink: 0;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 15px;
+
+  border:
+    1px solid
+    rgba(223, 61, 82, 0.18);
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(184, 24, 47, 0.2),
+      rgba(119, 13, 28, 0.08)
+    );
+
+  color: #ee5268;
+}
+
+
+/* =========================================================
+   ALEKEY MAIN TOTALS
+========================================================= */
+
+.alekey-progress-main-grid {
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      2,
+      minmax(0, 1fr)
+    );
+
+  gap: 12px;
+}
+
+.alekey-main-stat {
+  min-height: 130px;
+
+  padding: 18px;
+
+  display: flex;
+  flex-direction: column;
+
+  justify-content: center;
+
+  gap: 7px;
+
+  border-radius: 20px;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.07);
+}
+
+.alekey-main-stat.hours {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(16, 69, 48, 0.65),
+      rgba(11, 43, 32, 0.88)
+    );
+}
+
+.alekey-main-stat.money {
+  background:
+    linear-gradient(
+      135deg,
+      rgba(103, 17, 35, 0.7),
+      rgba(55, 11, 21, 0.88)
+    );
+}
+
+.alekey-main-stat-icon {
+  width: 38px;
+  height: 38px;
+
+  display: grid;
+  place-items: center;
+
+  margin-bottom: 3px;
+
+  border-radius: 12px;
+
+  background:
+    rgba(255, 255, 255, 0.07);
+}
+
+.alekey-main-stat.hours
+.alekey-main-stat-icon {
+  color: #4df08a;
+}
+
+.alekey-main-stat.money
+.alekey-main-stat-icon {
+  color: #ff7083;
+}
+
+.alekey-main-stat span {
+  color:
+    rgba(255, 255, 255, 0.63);
+
+  font-size: 14px;
+
+  font-weight: 700;
+}
+
+.alekey-main-stat strong {
+  color: #ffffff;
+
+  font-size:
+    clamp(
+      26px,
+      3vw,
+      38px
+    );
+
+  line-height: 1.05;
+}
+
+
+/* =========================================================
+   PAYMENT TYPES
+========================================================= */
+
+.alekey-payment-types {
+  margin-top: 12px;
+
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      3,
+      minmax(0, 1fr)
+    );
+
+  gap: 10px;
+}
+
+.alekey-payment-types > div {
+  min-height: 74px;
+
+  padding: 13px;
+
+  display: flex;
+  flex-direction: column;
+
+  justify-content: center;
+
+  gap: 3px;
+
+  border-radius: 16px;
+
+  background:
+    rgba(255, 255, 255, 0.035);
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.065);
+}
+
+.alekey-payment-types strong {
+  font-size: 19px;
+
+  color: #ffffff;
+}
+
+.alekey-payment-types span {
+  color:
+    rgba(255, 255, 255, 0.55);
+
+  font-size: 12px;
+}
+
+
+/* =========================================================
+   RANGE NOTICE
+========================================================= */
+
+.alekey-range-notice {
+  margin-top: 14px;
+
+  padding: 14px;
+
+  display: grid;
+
+  grid-template-columns:
+    auto 1fr auto;
+
+  gap: 12px;
+
+  align-items: center;
+
+  border-radius: 17px;
+
+  border:
+    1px solid
+    rgba(221, 79, 98, 0.15);
+
+  background:
+    rgba(140, 17, 33, 0.1);
+}
+
+.alekey-range-notice > svg {
+  color: #ef596e;
+}
+
+.alekey-range-notice strong {
+  color: #ffffff;
+}
+
+.alekey-range-notice p {
+  margin:
+    3px 0 0;
+
+  color:
+    rgba(255, 255, 255, 0.58);
+
+  font-size: 13px;
+}
+
+.alekey-range-notice button {
+  min-height: 38px;
+
+  padding:
+    0 15px;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.1);
+
+  border-radius: 13px;
+
+  background:
+    linear-gradient(
+      135deg,
+      #b5162e,
+      #82101e
+    );
+
+  color: #ffffff;
+
+  cursor: pointer;
+
+  font: inherit;
+  font-weight: 800;
+}
+
+
+/* =========================================================
+   SELECCIÓN DE JORNADAS
+========================================================= */
+
+.alekey-days-selection-bar {
+  position: relative;
+
+  z-index: 2;
+
+  margin-bottom: 14px;
+
+  display: flex;
+  flex-wrap: wrap;
+
+  align-items: center;
+
+  gap: 9px;
+}
+
+.alekey-selection-start-btn,
+.alekey-select-all-btn,
+.alekey-delete-paid-btn,
+.alekey-selection-cancel-btn {
+  min-height: 42px;
+
+  padding:
+    0 14px;
+
+  border-radius: 14px;
+
+  cursor: pointer;
+
+  display: inline-flex;
+
+  align-items: center;
+  justify-content: center;
+
+  gap: 7px;
+
+  font: inherit;
+  font-size: 13px;
+  font-weight: 850;
+
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease,
+    border-color 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.alekey-selection-start-btn,
+.alekey-select-all-btn {
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.1);
+
+  background:
+    rgba(255, 255, 255, 0.055);
+
+  color: #ffffff;
+}
+
+.alekey-delete-paid-btn {
+  border:
+    1px solid
+    rgba(239, 68, 68, 0.32);
+
+  background:
+    linear-gradient(
+      135deg,
+      rgba(186, 24, 47, 0.9),
+      rgba(111, 13, 28, 0.95)
+    );
+
+  color: #ffffff;
+}
+
+.alekey-selection-cancel-btn {
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.08);
+
+  background:
+    #25262d;
+
+  color:
+    rgba(255, 255, 255, 0.82);
+}
+
+.alekey-delete-paid-btn:disabled,
+.alekey-selection-cancel-btn:disabled {
+  opacity: 0.45;
+
+  cursor: not-allowed;
+
+  transform: none;
+}
+
+@media (hover: hover) {
+  .alekey-selection-start-btn:hover,
+  .alekey-select-all-btn:hover,
+  .alekey-delete-paid-btn:not(:disabled):hover,
+  .alekey-selection-cancel-btn:not(:disabled):hover {
+    transform:
+      translateY(-1px);
+  }
+
+  .alekey-selection-start-btn:hover,
+  .alekey-select-all-btn:hover {
+    background:
+      rgba(255, 255, 255, 0.085);
+  }
+}
+
+
+/* =========================================================
+   CANTIDAD SELECCIONADA
+========================================================= */
+
+.alekey-selection-count {
+  min-height: 42px;
+
+  padding:
+    0 13px;
+
+  display: inline-flex;
+
+  align-items: center;
+
+  gap: 6px;
+
+  border-radius: 14px;
+
+  background:
+    rgba(80, 211, 129, 0.09);
+
+  border:
+    1px solid
+    rgba(80, 211, 129, 0.15);
+
+  color: #5df091;
+}
+
+.alekey-selection-count strong {
+  font-size: 16px;
+}
+
+.alekey-selection-count span {
+  font-size: 12px;
+
+  font-weight: 800;
+}
+
+
+/* =========================================================
+   RESUMEN SELECCIONADO
+========================================================= */
+
+.alekey-selected-summary {
+  position: relative;
+
+  z-index: 2;
+
+  margin-bottom: 14px;
+
+  padding: 11px;
+
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      3,
+      minmax(0, 1fr)
+    );
+
+  gap: 8px;
+
+  border-radius: 17px;
+
+  border:
+    1px solid
+    rgba(77, 240, 138, 0.13);
+
+  background:
+    rgba(32, 117, 70, 0.08);
+}
+
+.alekey-selected-summary > div {
+  min-width: 0;
+
+  padding: 9px 10px;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 3px;
+
+  border-radius: 12px;
+
+  background:
+    rgba(255, 255, 255, 0.025);
+}
+
+.alekey-selected-summary span {
+  color:
+    rgba(255, 255, 255, 0.47);
+
+  font-size: 11px;
+
+  text-transform: uppercase;
+
+  letter-spacing: 0.04em;
+}
+
+.alekey-selected-summary strong {
+  overflow: hidden;
+
+  color: #ffffff;
+
+  text-overflow: ellipsis;
+
+  white-space: nowrap;
+}
+
+
+/* =========================================================
+   ALEKEY DAYS GRID
+========================================================= */
+
+.alekey-days-grid {
+  position: relative;
+
+  z-index: 1;
+
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      2,
+      minmax(0, 1fr)
+    );
+
+  gap: 13px;
+}
+
+.alekey-day-card {
+  min-width: 0;
+
+  padding: 16px;
+
+  border-radius: 20px;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.075);
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.045),
+      rgba(255, 255, 255, 0.017)
+    );
+}
+
+.alekey-day-header {
+  display: flex;
+  align-items: center;
+
+  gap: 11px;
+
+  margin-bottom: 14px;
+}
+
+.alekey-day-date-icon {
+  width: 39px;
+  height: 39px;
+
+  flex-shrink: 0;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 12px;
+
+  background:
+    rgba(174, 20, 42, 0.15);
+
+  color: #e84d63;
+}
+
+.alekey-day-header > div:last-child {
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 3px;
+}
+
+.alekey-day-header strong {
+  overflow: hidden;
+
+  color: #ffffff;
+
+  text-overflow: ellipsis;
+
+  white-space: nowrap;
+}
+
+.alekey-day-header span {
+  color:
+    rgba(255, 255, 255, 0.5);
+
+  font-size: 12px;
+}
+
+.alekey-day-totals {
+  display: grid;
+
+  grid-template-columns:
+    repeat(
+      2,
+      minmax(0, 1fr)
+    );
+
+  gap: 8px;
+
+  margin-bottom: 12px;
+}
+
+.alekey-day-totals > div {
+  padding: 11px;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 3px;
+
+  border-radius: 14px;
+
+  background:
+    rgba(255, 255, 255, 0.035);
+}
+
+.alekey-day-totals span {
+  color:
+    rgba(255, 255, 255, 0.48);
+
+  font-size: 11px;
+
+  text-transform: uppercase;
+
+  letter-spacing: 0.05em;
+}
+
+.alekey-day-totals strong {
+  color: #ffffff;
+
+  font-size: 17px;
+}
+
+
+/* =========================================================
+   INDIVIDUAL JOBS
+========================================================= */
+
+.alekey-day-jobs {
+  display: flex;
+  flex-direction: column;
+
+  gap: 7px;
+}
+
+.alekey-day-job {
+  min-width: 0;
+
+  padding:
+    10px 0;
+
+  display: grid;
+
+  grid-template-columns:
+    minmax(0, 1fr)
+    auto;
+
+  align-items: center;
+
+  gap: 14px;
+
+  border-top:
+    1px solid
+    rgba(255, 255, 255, 0.055);
+
+  transition:
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.alekey-day-job.selection-active {
+  grid-template-columns:
+    auto
+    minmax(0, 1fr)
+    auto;
+
+  padding:
+    10px;
+
+  border-radius: 13px;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.055);
+}
+
+.alekey-day-job.selection-active.selected {
+  border-color:
+    rgba(80, 224, 132, 0.27);
+
+  background:
+    rgba(34, 197, 94, 0.07);
+}
+
+
+/* =========================================================
+   CHECK DE SELECCIÓN
+========================================================= */
+
+.alekey-select-check {
+  width: 32px;
+  height: 32px;
+
+  flex-shrink: 0;
+
+  padding: 0;
+
+  display: grid;
+  place-items: center;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.17);
+
+  border-radius: 10px;
+
+  background:
+    rgba(255, 255, 255, 0.04);
+
+  color: #ffffff;
+
+  cursor: pointer;
+
+  transition:
+    background 0.18s ease,
+    border-color 0.18s ease,
+    transform 0.18s ease;
+}
+
+.alekey-select-check.selected {
+  border-color:
+    rgba(77, 240, 138, 0.45);
+
+  background:
+    #198647;
+
+  color: #ffffff;
+}
+
+.alekey-select-check:active {
+  transform:
+    scale(0.94);
+}
+
+
+/* =========================================================
+   JOB COPY
+========================================================= */
+
+.alekey-day-job-copy,
+.alekey-day-job-values {
+  min-width: 0;
+
+  display: flex;
+  flex-direction: column;
+
+  gap: 3px;
+}
+
+.alekey-day-job-values {
+  flex-shrink: 0;
+
+  text-align: right;
+}
+
+.alekey-day-job strong {
+  overflow: hidden;
+
+  color:
+    rgba(255, 255, 255, 0.9);
+
+  text-overflow: ellipsis;
+
+  white-space: nowrap;
+}
+
+.alekey-day-job span {
+  color:
+    rgba(255, 255, 255, 0.48);
+
+  font-size: 12px;
+}
+
+
+/* =========================================================
+   VER TODAS / MINIMIZAR
+========================================================= */
+
+.alekey-days-expand-btn {
+  position: relative;
+
+  z-index: 2;
+
+  width: 100%;
+
+  min-height: 48px;
+
+  margin-top: 14px;
+
+  padding:
+    0 16px;
+
+  border:
+    1px solid
+    rgba(255, 255, 255, 0.09);
+
+  border-radius: 15px;
+
+  background:
+    linear-gradient(
+      145deg,
+      rgba(255, 255, 255, 0.055),
+      rgba(255, 255, 255, 0.025)
+    );
+
+  color: #ffffff;
+
+  cursor: pointer;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 8px;
+
+  font: inherit;
+  font-weight: 850;
+
+  transition:
+    transform 0.2s ease,
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+@media (hover: hover) {
+  .alekey-days-expand-btn:hover {
+    transform:
+      translateY(-1px);
+
+    border-color:
+      rgba(214, 47, 72, 0.25);
+
+    background:
+      rgba(255, 255, 255, 0.07);
+  }
+}
+
+
+/* =========================================================
+   EMPTY
+========================================================= */
+
+.alekey-empty-hours {
+  min-height: 170px;
+
+  display: flex;
+  flex-direction: column;
+
+  align-items: center;
+  justify-content: center;
+
+  gap: 7px;
+
+  text-align: center;
+
+  color:
+    rgba(255, 255, 255, 0.55);
+}
+
+.alekey-empty-hours svg {
+  margin-bottom: 4px;
+
+  color: #b7293f;
+}
+
+.alekey-empty-hours strong {
+  color:
+    rgba(255, 255, 255, 0.86);
+
+  font-size: 17px;
+}
+
+.alekey-empty-hours p {
+  margin: 0;
+}
+
+
+/* =========================================================
+   PAYMENT PREVIEW
+========================================================= */
+
+.payment-preview {
+  margin-top: 14px;
+
+  padding: 13px 15px;
+
+  border-radius: 15px;
+
+  background:
+    rgba(255, 255, 255, 0.04);
+
+  color: #56ed8e;
+
+  font-weight: 800;
+}
+
+
+/* =========================================================
+   RESPONSIVE
+========================================================= */
+
+@media (max-width: 850px) {
+  .alekey-days-grid {
+    grid-template-columns:
+      1fr;
+  }
+}
+
+
+@media (max-width: 650px) {
+  .progress-page {
+    gap: 14px;
+  }
+
+  .progress-card {
+    padding: 17px;
+
+    border-radius: 20px;
+  }
+
+  .progress-summary-grid {
+    grid-template-columns:
+      1fr;
+  }
+
+  .progress-summary-card {
+    min-height: 104px;
+  }
+
+  .alekey-progress-main-grid {
+    grid-template-columns:
+      1fr;
+  }
+
+  .alekey-payment-types {
+    grid-template-columns:
+      1fr;
+  }
+
+  .alekey-range-notice {
+    grid-template-columns:
+      auto 1fr;
+  }
+
+  .alekey-range-notice button {
+    grid-column:
+      1 / -1;
+
+    width: 100%;
+  }
+
+  .alekey-day-totals {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+  }
+
+  .alekey-progress-heading h2 {
+    font-size: 21px;
+  }
+
+  /* =======================================================
+     SELECCIÓN MÓVIL
+  ======================================================= */
+
+  .alekey-days-selection-bar {
+    display: grid;
+
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+  }
+
+  .alekey-selection-start-btn {
+    grid-column:
+      1 / -1;
+
+    width: 100%;
+  }
+
+  .alekey-selection-count,
+  .alekey-select-all-btn,
+  .alekey-delete-paid-btn,
+  .alekey-selection-cancel-btn {
+    width: 100%;
+  }
+
+  .alekey-selection-count {
+    justify-content: center;
+  }
+
+  .alekey-selected-summary {
+    grid-template-columns:
+      repeat(
+        3,
+        minmax(0, 1fr)
+      );
+  }
+
+  .alekey-day-job.selection-active {
+    grid-template-columns:
+      auto
+      minmax(0, 1fr)
+      auto;
+  }
+}
+
+
+@media (max-width: 430px) {
+  .progress-range-tabs {
+    display: grid;
+
+    grid-template-columns:
+      repeat(
+        3,
+        minmax(0, 1fr)
+      );
+  }
+
+  .progress-range-tabs button {
+    padding:
+      0 8px;
+
+    font-size: 12px;
+  }
+
+  .alekey-day-totals {
+    grid-template-columns:
+      1fr;
+  }
+
+  .alekey-selected-summary {
+    grid-template-columns:
+      1fr;
+  }
+
+  .alekey-days-selection-bar {
+    grid-template-columns:
+      1fr;
+  }
+
+  .alekey-selection-start-btn {
+    grid-column:
+      auto;
+  }
+
+  .alekey-day-job,
+  .alekey-day-job.selection-active {
+    grid-template-columns:
+      auto
+      minmax(0, 1fr);
+
+    align-items:
+      start;
+  }
+
+  .alekey-day-job-values {
+    grid-column:
+      2;
+
+    text-align:
+      left;
+  }
+
+  .alekey-day-job:not(.selection-active)
+  .alekey-day-job-values {
+    grid-column:
+      1 / -1;
+  }
+}

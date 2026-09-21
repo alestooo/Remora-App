@@ -1,6 +1,11 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import {
+  getFirestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from "firebase/firestore";
 import { getMessaging } from "firebase/messaging";
 
 const firebaseConfig = {
@@ -16,5 +21,24 @@ const app = initializeApp(firebaseConfig);
 
 export const auth = getAuth(app);
 export const provider = new GoogleAuthProvider();
-export const db = getFirestore(app);
-export const messaging = getMessaging(app);
+
+let firestore;
+try {
+  firestore = initializeFirestore(app, {
+    localCache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager(),
+    }),
+  });
+} catch (error) {
+  console.warn("No se pudo iniciar la caché persistente de Firestore:", error);
+  firestore = getFirestore(app);
+}
+
+export const db = firestore;
+let messagingInstance = null;
+try {
+  messagingInstance = getMessaging(app);
+} catch (error) {
+  console.warn("Firebase Messaging no está disponible en este navegador:", error);
+}
+export const messaging = messagingInstance;
