@@ -1,0 +1,65 @@
+Remora Source License
+Version 1.0
+
+Copyright (c) 2026 Alejandro Soto Víquez
+All rights reserved.
+
+1. Ownership
+
+Remora, including its source code, design, architecture, documentation,
+graphics, branding, and related materials, is the intellectual property
+of Alejandro Soto Víquez unless otherwise stated.
+
+2. Permitted Use
+
+Permission is granted to view and inspect the source code of this project
+for educational, portfolio, evaluation, and reference purposes.
+
+You may clone or download the repository solely for personal evaluation,
+testing, or educational review.
+
+3. Restrictions
+
+Without prior written permission from the copyright holder, you may not:
+
+- Redistribute the source code or substantial portions of it.
+- Publish modified versions of Remora.
+- Create or distribute derivative applications based substantially on Remora.
+- Sell, sublicense, rent, or commercially exploit the software.
+- Rebrand or present Remora, or substantial portions of it, as your own work.
+- Use the Remora name, logo, visual identity, or branding in another product.
+- Host or deploy a public copy of Remora intended to replace or compete with
+  the original project.
+
+4. Contributions
+
+Submitting a contribution to this repository does not transfer ownership
+of the project.
+
+Unless otherwise agreed in writing, contributions may be incorporated into
+Remora by the copyright holder while the contributor retains ownership of
+their original contribution.
+
+5. Third-Party Software
+
+This license does not replace or override the licenses of third-party
+libraries, frameworks, assets, or services used by Remora.
+
+Those components remain subject to their respective licenses.
+
+6. No Warranty
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE, AND NON-INFRINGEMENT.
+
+IN NO EVENT SHALL THE COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES,
+OR OTHER LIABILITY ARISING FROM THE USE OF THE SOFTWARE.
+
+7. Permission Requests
+
+For permission to use, modify, distribute, or commercially license Remora,
+contact the copyright holder.
+
+Copyright (c) 2026 Alejandro Soto Víquez
+All rights reserved.
